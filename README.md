@@ -133,12 +133,15 @@ confidence-based automation · human feedback loops.
 
 ## Status
 
-Documentation, architecture, and implementation are complete: `mcp-server` (17 tests) and
-`ai-service` (19 tests) both pass their automated test suites, and the full six-container stack
-(Postgres, Redis, Chatwoot web + Sidekiq, `mcp-server`, `ai-service`) was verified live with
-`docker compose up` — all six reach a healthy state, and a real request was traced end-to-end
-from `ai-service`'s webhook auth, through a real MCP call to `mcp-server`, to a real (correctly
-rejected, since no real token was configured for this test) call against the Chatwoot container.
-The one remaining manual step is Chatwoot's first-admin creation, which has no API and is a
-one-time browser action for whoever runs this — see [docs/setup.md](docs/setup.md). Full detail
-in [PROJECT_JOURNAL.md](PROJECT_JOURNAL.md).
+Documentation, architecture, and implementation are complete and have been through a full
+interactive test pass against a real Chatwoot instance (real admin account, real API token, real
+inbox), not just automated tests: `mcp-server` (20 tests) and `ai-service` (21 tests) pass their
+suites, and every demo scenario — spam, the bug/crash known-issue match with a grounded draft
+response, and reporting — was run live end to end, both through the fully automated `ai-service`
+webhook pipeline and by driving `mcp-server`'s tools directly from a connected Claude Code
+session. That live pass caught six real cross-service bugs invisible to unit tests alone
+(a Chatwoot SSRF protection blocking same-network webhooks, a message-type shape mismatch, an
+uncaught auth-error exception type, a too-narrow MCP tool schema, label-replace-vs-merge
+semantics, and a malformed multi-condition filter query) — all fixed, all covered by new
+regression tests, all reverified live. Full account in
+[PROJECT_JOURNAL.md, Milestone 2](PROJECT_JOURNAL.md).

@@ -10,6 +10,12 @@ x-chatwoot-env: &chatwoot-env
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatwoot}
   POSTGRES_DATABASE: ${POSTGRES_DATABASE:-chatwoot}
   REDIS_URL: redis://redis:6379
+  # Chatwoot's outgoing webhook delivery uses the ssrf_filter gem and refuses any destination
+  # that resolves to a private IP range by default -- which includes every other container on
+  # this same Compose network, ai-service among them ("Hostname 'ai-service' has no public ip
+  # addresses"). This is Chatwoot's own documented escape hatch (lib/safe_fetch.rb) for exactly
+  # this self-hosted, same-network case. See PROJECT_JOURNAL.md, Milestone 2.
+  SAFE_FETCH_ALLOW_PRIVATE_NETWORK: "true"
 
 services:
   postgres:

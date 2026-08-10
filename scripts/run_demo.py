@@ -11,7 +11,6 @@ import json
 import os
 import sys
 import time
-import uuid
 from pathlib import Path
 
 import httpx
@@ -36,34 +35,53 @@ def _client() -> httpx.Client:
     return httpx.Client(base_url=CHATWOOT_URL, headers={"api_access_token": API_TOKEN}, timeout=15.0)
 
 
-def _first_inbox_id(client: httpx.Client) -> int:
+def _first_inbox_identifier(client: httpx.Client) -> str:
     inboxes = client.get(f"/api/v1/accounts/{ACCOUNT_ID}/inboxes").json().get("payload", [])
     if not inboxes:
         print("No inbox found -- complete the Chatwoot onboarding wizard first (docs/setup.md step 3).", file=sys.stderr)
         sys.exit(1)
-    return inboxes[0]["id"]
+    identifier = inboxes[0].get("inbox_identifier")
+    if not identifier:
+        print(
+            "The first inbox has no inbox_identifier -- this script needs an API-channel inbox "
+            "(Settings > Inboxes > Add Inbox > API). See docs/setup.md.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return identifier
 
 
-def _create_conversation(client: httpx.Client, inbox_id: int, ticket: dict) -> int:
+def _create_conversation(client: httpx.Client, inbox_identifier: str, ticket: dict) -> int:
+    """Seed a conversation as a genuine player message, not an agent-authored one.
+
+    Chatwoot's Application API conversation-create shortcut (POST .../conversations with a
+    `message` object, authenticated as an agent) creates that seed message as *outgoing*
+    (agent-sent), not incoming -- found live, this meant ai-service's webhook filter
+    (message_type == "incoming") never matched conversations created this way, so the whole
+    automated pipeline silently never ran for demo-seeded tickets. The public Client API
+    (unauthenticated, the same one a real widget/API-channel integration uses) is the only way
+    to create a message that's genuinely attributed to the contact. See PROJECT_JOURNAL.md,
+    Milestone 2.
+    """
+    base = f"/public/api/v1/inboxes/{inbox_identifier}"
+
     contact_response = client.post(
-        f"/api/v1/accounts/{ACCOUNT_ID}/contacts",
-        json={"name": ticket["contact"]["name"], "email": ticket["contact"]["email"], "inbox_id": inbox_id},
+        f"{base}/contacts", json={"name": ticket["contact"]["name"], "email": ticket["contact"]["email"]}
     )
     contact_response.raise_for_status()
-    contact_id = contact_response.json()["payload"]["contact"]["id"]
+    contact_source_id = contact_response.json()["source_id"]
 
-    conversation_response = client.post(
-        f"/api/v1/accounts/{ACCOUNT_ID}/conversations",
-        json={
-            "source_id": f"demo-{ticket['scenario']}-{uuid.uuid4()}",
-            "inbox_id": inbox_id,
-            "contact_id": contact_id,
-            "status": "open",
-            "message": {"content": ticket["message"]},
-        },
-    )
+    conversation_response = client.post(f"{base}/contacts/{contact_source_id}/conversations", json={})
     conversation_response.raise_for_status()
-    return conversation_response.json()["id"]
+    conversation_id = conversation_response.json()["id"]
+
+    message_response = client.post(
+        f"{base}/contacts/{contact_source_id}/conversations/{conversation_id}/messages",
+        json={"content": ticket["message"], "message_type": "incoming"},
+    )
+    message_response.raise_for_status()
+
+    return conversation_id
 
 
 def _poll_for_result(client: httpx.Client, conversation_id: int) -> dict:
@@ -78,13 +96,13 @@ def _poll_for_result(client: httpx.Client, conversation_id: int) -> dict:
 
 
 def run_scenarios(client: httpx.Client) -> None:
-    inbox_id = _first_inbox_id(client)
+    inbox_identifier = _first_inbox_identifier(client)
     for ticket_path in sorted(TICKETS_DIR.glob("*.json")):
         ticket = json.loads(ticket_path.read_text(encoding="utf-8"))
         print(f"\n=== Scenario: {ticket['scenario']} ===")
         print(f"Player message: {ticket['message'][:100]}...")
 
-        conversation_id = _create_conversation(client, inbox_id, ticket)
+        conversation_id = _create_conversation(client, inbox_identifier, ticket)
         print(f"Created conversation {conversation_id}, waiting for ai-service...")
 
         conversation = _poll_for_result(client, conversation_id)

@@ -73,9 +73,23 @@ class ChatwootClient:
             "POST", f"/conversations/{conversation_id}/toggle_status", json={"status": status}
         )
 
+    async def get_conversation_labels(self, conversation_id: int) -> list[str]:
+        result = await self._request("GET", f"/conversations/{conversation_id}/labels")
+        return result.get("payload", [])
+
     async def add_conversation_labels(self, conversation_id: int, labels: list[str]) -> dict:
+        """Add labels without clobbering existing ones.
+
+        Chatwoot's labels endpoint has *replace* semantics -- POSTing a label list sets the
+        conversation's full label set, it does not union with what's already there. Found live:
+        calling this for "crash" then again for "human-escalated" left only "human-escalated"
+        on the conversation, silently dropping "crash". Read-merge-write here is what makes an
+        "add" tool actually add. See PROJECT_JOURNAL.md, Milestone 2.
+        """
+        existing = await self.get_conversation_labels(conversation_id)
+        merged = sorted(set(existing) | set(labels))
         return await self._request(
-            "POST", f"/conversations/{conversation_id}/labels", json={"labels": labels}
+            "POST", f"/conversations/{conversation_id}/labels", json={"labels": merged}
         )
 
     async def set_conversation_attributes(self, conversation_id: int, attributes: dict) -> dict:

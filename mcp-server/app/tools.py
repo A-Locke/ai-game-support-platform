@@ -92,6 +92,26 @@ async def search_contacts(query: str) -> dict:
         return _error(exc)
 
 
+def _date_range_conditions(since: str, until: str, *extra: dict) -> list[dict]:
+    """Build a Chatwoot filter condition list with correct query_operator placement.
+
+    Chatwoot's filter API treats query_operator as the joiner between condition i and i+1, not
+    a per-condition flag -- it must be set on every condition except the last, or the generated
+    SQL is missing an AND/OR between two of the WHERE clauses and Chatwoot 500s with a
+    PG::SyntaxError. Found live: get_category_statistics appends a third (label) condition to a
+    two-condition base that only had query_operator on its first entry, leaving conditions 2
+    and 3 unjoined. See PROJECT_JOURNAL.md, Milestone 2.
+    """
+    conditions = [
+        {"attribute_key": "created_at", "filter_operator": "is_greater_than", "values": [since]},
+        {"attribute_key": "created_at", "filter_operator": "is_less_than", "values": [until]},
+        *extra,
+    ]
+    for condition in conditions[:-1]:
+        condition["query_operator"] = "and"
+    return conditions
+
+
 @mcp.tool()
 async def get_support_statistics(since: str, until: str) -> dict:
     """Aggregate ticket volume statistics for a date range (ISO 8601 dates, e.g. "2026-08-01").
@@ -101,25 +121,19 @@ async def get_support_statistics(since: str, until: str) -> dict:
     label). This is data retrieval only -- no summarisation happens here.
     """
     client = get_client()
-    base_conditions = [
-        {
-            "attribute_key": "created_at",
-            "filter_operator": "is_greater_than",
-            "values": [since],
-            "query_operator": "and",
-        },
-        {"attribute_key": "created_at", "filter_operator": "is_less_than", "values": [until]},
-    ]
     try:
-        total = await client.filter_conversations(base_conditions)
+        total = await client.filter_conversations(_date_range_conditions(since, until))
         spam = await client.filter_conversations(
-            [*base_conditions, {"attribute_key": "labels", "filter_operator": "equal_to", "values": ["spam"]}]
+            _date_range_conditions(
+                since, until, {"attribute_key": "labels", "filter_operator": "equal_to", "values": ["spam"]}
+            )
         )
         escalated = await client.filter_conversations(
-            [
-                *base_conditions,
+            _date_range_conditions(
+                since,
+                until,
                 {"attribute_key": "labels", "filter_operator": "equal_to", "values": ["human-escalated"]},
-            ]
+            )
         )
     except ChatwootAPIError as exc:
         return _error(exc)
@@ -144,23 +158,15 @@ async def get_category_statistics(since: str, until: str, categories: list[str])
     what a "category" is -- categories are just Chatwoot labels to it.
     """
     client = get_client()
-    base_conditions = [
-        {
-            "attribute_key": "created_at",
-            "filter_operator": "is_greater_than",
-            "values": [since],
-            "query_operator": "and",
-        },
-        {"attribute_key": "created_at", "filter_operator": "is_less_than", "values": [until]},
-    ]
     counts: dict[str, int] = {}
     try:
         for category in categories:
             result = await client.filter_conversations(
-                [
-                    *base_conditions,
+                _date_range_conditions(
+                    since,
+                    until,
                     {"attribute_key": "labels", "filter_operator": "equal_to", "values": [category.lower()]},
-                ]
+                )
             )
             counts[category] = result.get("meta", {}).get("all_count", len(result.get("payload", [])))
     except ChatwootAPIError as exc:
@@ -197,8 +203,14 @@ async def add_conversation_tag(conversation_id: int, tags: list[str]) -> dict:
 
 
 @mcp.tool()
-async def set_conversation_attributes(conversation_id: int, attributes: dict[str, str]) -> dict:
-    """Set custom attributes on a conversation (e.g. ai_category, ai_confidence)."""
+async def set_conversation_attributes(conversation_id: int, attributes: dict[str, str | float | bool]) -> dict:
+    """Set custom attributes on a conversation (e.g. ai_category: str, ai_confidence: float).
+
+    Chatwoot custom attributes can be text, number, or boolean -- dict[str, str] was too
+    narrow and rejected a real ai_confidence float from ai-service in live testing (a
+    cross-service contract mismatch neither side's own unit tests could catch on their own).
+    See PROJECT_JOURNAL.md, Milestone 2.
+    """
     if guard := _mutation_guard():
         return guard
     try:

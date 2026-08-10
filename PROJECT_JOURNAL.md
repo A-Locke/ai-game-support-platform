@@ -118,3 +118,104 @@ container's real error output.
 - No screenshots exist; `docs/screenshots/` was removed rather than committed empty.
 
 ---
+
+## Milestone 2 — Full interactive test pass, real credentials, real bugs
+
+**Status:** complete
+**Date started:** 2026-08-11
+**Date completed:** 2026-08-11
+
+### What happened
+
+The project owner asked to actually test the running platform. Milestone 1's manual-onboarding
+gap was closed live: the owner completed the Chatwoot admin wizard by hand and provided a real
+API token. Rather than configure `ANTHROPIC_API_KEY` (no key was available), the owner proposed
+registering `mcp-server` as a project-scoped MCP connector (`.mcp.json`, gitignored — it embeds
+a real bearer token and is a testing convenience, not part of the deliverable) so this Claude
+Code session could drive the MCP tools directly, standing in for `ai-service`'s own Claude calls.
+That let real classification happen with zero API dependency, and — more importantly — put
+every real HTTP hop under direct observation instead of behind a mocked test.
+
+That observation surfaced six real bugs, none of which the 36 passing unit tests from Milestone
+1 had caught, because each one only shows up when both real services talk to a real Chatwoot at
+once:
+
+1. **Chatwoot blocks webhooks to any private-network destination by default.** Registering
+   `ai-service`'s webhook produced `WARN -- : Exception: Invalid webhook URL ... Hostname
+   'ai-service' has no public ip addresses` in the Sidekiq logs -- the `ssrf_filter` gem Chatwoot
+   uses for outgoing webhook delivery rejects RFC1918 ranges by default, which covers every other
+   container on the same Compose network regardless of hostname. Root-caused by reading
+   Chatwoot's own source inside the image (`lib/safe_fetch.rb`, `lib/safe_fetch/fetcher.rb`),
+   which turned up an intentional, documented escape hatch:
+   `SAFE_FETCH_ALLOW_PRIVATE_NETWORK=true`. Added to `docker-compose.yml`'s `chatwoot-env`
+   anchor. Without this, the entire automated webhook pipeline was silently dead on arrival for
+   any same-network deployment -- Docker Compose locally, and the single-VM cloud path both.
+2. **`get_conversation_messages`' message_type is an integer, not the string ai-service checked
+   for.** `ai-service/app/workflows/classify.py`'s `_extract_player_messages` compared
+   `m.get("message_type") == "incoming"`. Chatwoot's Application API returns the raw enum (`0`
+   for incoming); only the *webhook payload* separately serializes a string label. Confirmed by
+   inspecting a real Sidekiq `WebhookJob` payload directly. Every real conversation's messages
+   silently filtered down to zero, meaning Claude never got the actual player content. Fixed to
+   accept both `0` and `"incoming"`; the test fixture that had been asserting the wrong (string)
+   shape was fixed too, since it had been quietly validating the bug, not the behavior.
+3. **A missing/empty `ANTHROPIC_API_KEY` crashed the webhook handler instead of degrading.** The
+   anthropic SDK raises a plain `TypeError` from request *construction*, before any HTTP call,
+   when the key is empty -- `except APIError` never saw it, so the first real webhook delivery
+   500'd. Broadened both `claude_client.py` exception handlers to catch `Exception`, with a
+   regression test that intentionally calls with no respx mock (so a real network attempt would
+   fail the test, proving the error really is pre-flight).
+4. **`set_conversation_attributes`'s MCP schema was too narrow.** Declared as `dict[str, str]`;
+   `ai-service` legitimately sends a float (`ai_confidence`) alongside a string (`ai_category`)
+   in the same call. A cross-service contract mismatch that neither service's own unit tests
+   could catch alone, since each side's tests only exercised its own assumptions about the other.
+   Widened to `dict[str, str | float | bool]`.
+5. **Chatwoot's labels endpoint replaces the label set, it doesn't add to it.** Tagging "crash"
+   then separately tagging "human-escalated" on the same conversation left only
+   "human-escalated" -- confirmed by watching a real conversation's labels collapse after
+   `create_draft_response`'s internal "ai-draft" tag call. `add_conversation_labels` now reads
+   the current labels first and unions before writing, so the tool actually does what its name
+   says.
+6. **The reporting tools' Chatwoot filter payload produced invalid SQL.** `query_operator` is
+   the *joiner between* condition i and i+1, not a per-condition flag -- it needs to be set on
+   every condition except the last, not just the first. A 3-condition filter (date range +
+   label) left conditions 2 and 3 unjoined, and Chatwoot 500'd with a raw
+   `PG::SyntaxError: ... EXISTS (SE...`, visible directly in the Rails log. Replaced the
+   ad hoc condition-building in both reporting tools with a shared `_date_range_conditions`
+   helper that places `query_operator` correctly regardless of how many extra conditions are
+   appended.
+
+A seventh issue was found in `scripts/run_demo.py` by inspection once (1) was understood: its
+conversation-seeding helper used the Application API's `message` shortcut on conversation
+creation, which (confirmed live) creates that seed message as *outgoing* (agent-authored), not
+incoming -- meaning the demo script's seeded tickets would never have triggered the automated
+pipeline at all, silently. Rewritten to use Chatwoot's public Client API
+(`/public/api/v1/inboxes/{identifier}/contacts/.../messages` with `message_type: "incoming"`),
+the same unauthenticated path a real widget/API-channel integration uses. Also found:
+`docs/setup.md` assumed the onboarding wizard always creates an inbox; the project owner's real
+wizard run didn't, so step 3 now says to check and add one (API channel) if missing.
+
+### Verified, end to end, for real
+
+All three demo scenarios (spam, bug/crash with a KI-014 known-issue match and a grounded draft,
+and reporting) were run against the live stack after every fix above -- once through the fully
+automated `ai-service` webhook pipeline (with no Claude key, correctly degrading to a safe
+human-escalated fallback, which is itself the intended safety behavior), and once by driving
+`mcp-server`'s tools directly from this session for real, content-aware classification. The
+final `get_support_statistics`/`get_category_statistics` output (7 conversations, 1 spam, 4
+human-escalated, category breakdown matching exactly what was tagged) was cross-checked against
+what had actually been done to each conversation, not just trusted.
+
+Every fix above shipped with a regression test *and* was confirmed against the real stack after
+rebuilding the affected image(s) -- not just re-run against mocks. Test counts: `mcp-server` 17
+→ 20, `ai-service` 19 → 21.
+
+### Lesson
+
+Two services' unit test suites, each internally consistent and fully passing, do not prove the
+contract *between* them is correct -- five of these six bugs are exactly that class of gap
+(payload shape assumptions, replace-vs-merge semantics, exception-hierarchy assumptions) and
+every one of them was invisible until both real services and a real Chatwoot were in the loop
+together. Reading the actual Rails/Sidekiq logs, and in two cases the Chatwoot image's own
+source, settled root causes that would otherwise have been guesswork.
+
+---

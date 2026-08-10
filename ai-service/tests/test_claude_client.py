@@ -2,7 +2,25 @@ import respx
 from httpx import Response
 
 from app.claude_client import classify_conversation, summarize_report
+from app.config import settings
 from tests.conftest import ANTHROPIC_MESSAGES_URL, text_response, tool_use_response
+
+
+async def test_missing_api_key_falls_back_instead_of_crashing():
+    # Regression test: found live against a real deployment with no ANTHROPIC_API_KEY set.
+    # The anthropic SDK raises a plain TypeError from request *construction* (before any HTTP
+    # call) when the key is empty, which `except APIError` did not catch -- it 500'd the whole
+    # webhook handler instead of degrading to the safe fallback. No respx mock here on purpose:
+    # a real network call would mean the TypeError wasn't actually raised pre-flight.
+    original_key = settings.anthropic_api_key
+    settings.anthropic_api_key = ""
+    try:
+        result = await classify_conversation(["some message"])
+    finally:
+        settings.anthropic_api_key = original_key
+
+    assert result.category == "Other"
+    assert result.requires_human is True
 
 
 @respx.mock

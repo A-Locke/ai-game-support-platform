@@ -5,7 +5,7 @@ LLM means rewriting this file and nothing else -- see docs/architecture.md#repla
 from __future__ import annotations
 
 import structlog
-from anthropic import AsyncAnthropic, APIError
+from anthropic import AsyncAnthropic
 from pydantic import ValidationError
 
 from app.config import settings
@@ -86,8 +86,15 @@ async def classify_conversation(conversation_messages: list[str]) -> Classificat
                 messages=[{"role": "user", "content": _build_prompt(conversation_messages)}],
             )
             break
-        except APIError as exc:
-            logger.warning("claude_api_error", attempt=attempt, error=str(exc))
+        except Exception as exc:
+            # Deliberately broad, not just anthropic.APIError: a missing/empty API key raises
+            # a plain TypeError from the SDK's own request-construction code, before any HTTP
+            # call happens at all, so it never reaches an APIError handler. Found live -- the
+            # first real test run (no ANTHROPIC_API_KEY set) 500'd the whole webhook instead of
+            # degrading to _FALLBACK as designed. From this function's contract, any failure to
+            # produce a usable response means the same thing to the caller. See
+            # PROJECT_JOURNAL.md, Milestone 2.
+            logger.warning("claude_call_failed", attempt=attempt, error=str(exc))
             if attempt == 1:
                 return _FALLBACK
     else:
@@ -124,8 +131,8 @@ async def summarize_report(report_data: dict) -> str:
                 }
             ],
         )
-    except APIError as exc:
-        logger.warning("claude_api_error_report", error=str(exc))
+    except Exception as exc:
+        logger.warning("claude_call_failed_report", error=str(exc))
         return "Summary unavailable (Claude API error) -- see raw data above."
 
     text_block = next((b for b in response.content if b.type == "text"), None)

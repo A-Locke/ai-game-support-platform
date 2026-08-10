@@ -27,7 +27,11 @@ class FakeMCP:
 
 
 def _player_messages_payload(*texts: str) -> dict:
-    return {"payload": [{"message_type": "incoming", "private": False, "content": t} for t in texts]}
+    # message_type: 0 matches Chatwoot's real Application API response shape (a raw integer
+    # enum), not the string "incoming" used in webhook payloads -- this fixture originally used
+    # the string, which meant the classify_conversation filter's string-vs-int bug (fixed in
+    # app.workflows.classify) went undetected until a real Chatwoot instance caught it live.
+    return {"payload": [{"message_type": 0, "private": False, "content": t} for t in texts]}
 
 
 @pytest.fixture
@@ -54,6 +58,33 @@ def escalation_result() -> ClassificationResult:
         reason="Repeatable crash, matches known issue KI-014.",
         draft_response="Thanks for the report! This is a known issue (KI-014)...",
     )
+
+
+async def test_player_message_extraction_matches_real_chatwoot_message_type_shape(monkeypatch, bug_result):
+    fake = FakeMCP(
+        {
+            "get_conversation_messages": {
+                "payload": [
+                    {"message_type": 0, "private": False, "content": "player message"},
+                    {"message_type": 1, "private": False, "content": "agent reply, must be excluded"},
+                    {"message_type": 0, "private": True, "content": "private note, must be excluded"},
+                ]
+            }
+        }
+    )
+    monkeypatch.setattr(mcp_client, "call_tool", fake.call_tool)
+
+    captured = {}
+
+    def _capture(messages):
+        captured["messages"] = messages
+        return _async_return(bug_result)
+
+    monkeypatch.setattr(classify_module, "classify_conversation", _capture)
+
+    await classify_module.process_incoming_message(conversation_id=9, message_id=900)
+
+    assert captured["messages"] == ["player message"]
 
 
 async def test_spam_conversation_is_tagged_and_moved_to_pending(monkeypatch, spam_result):

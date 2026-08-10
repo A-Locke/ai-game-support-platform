@@ -2,6 +2,10 @@
 .env
 *.env.local
 
+# Local ad-hoc MCP connector config (embeds a real bearer token) -- used to drive mcp-server
+# interactively from a Claude Code session during manual testing, not part of the deliverable.
+.mcp.json
+
 # Python
 __pycache__/
 *.pyc

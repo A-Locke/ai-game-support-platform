@@ -15,13 +15,19 @@ logger = structlog.get_logger(__name__)
 IDEMPOTENCY_ATTRIBUTE = "ai_last_processed_message_id"
 
 
+_INCOMING = ("incoming", 0)  # Chatwoot's Application API returns the raw integer enum (0);
+# webhook payloads separately serialize it as the string "incoming" (see
+# app.models.ChatwootWebhookEvent). get_conversation_messages goes through the former path --
+# found live when a real message never matched this filter because it was compared as a string.
+
+
 async def _extract_player_messages(conversation_id: int) -> list[str]:
     payload = await mcp_client.call_tool("get_conversation_messages", conversation_id=conversation_id)
     messages = payload.get("payload", payload if isinstance(payload, list) else [])
     return [
         m["content"]
         for m in messages
-        if isinstance(m, dict) and m.get("message_type") == "incoming" and not m.get("private") and m.get("content")
+        if isinstance(m, dict) and m.get("message_type") in _INCOMING and not m.get("private") and m.get("content")
     ]
 
 

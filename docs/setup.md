@@ -49,14 +49,26 @@ Chatwoot's very first admin account can't be created via API (there's no account
 authenticate against yet) — this one step is a manual UI action:
 
 1. Open `http://localhost:3000`, follow the onboarding wizard to create the first
-   administrator account and inbox.
-2. In Chatwoot: **Profile settings → Access Token**, copy it.
+   administrator account. Depending on the wizard flow you're offered, this may or may not
+   also create an inbox — verify under **Settings → Inboxes**; if none exists, add one
+   (**Add Inbox → API** is the simplest channel type and is what `scripts/run_demo.py` expects).
+2. In Chatwoot: click your name at the bottom of the sidebar → **Profile Settings**, then scroll
+   down to the **Access Token** section and copy it (this is a different page from Account
+   Settings, and the account ID shown there is unrelated to this token).
 3. Paste that token into `.env` as `CHATWOOT_API_ACCESS_TOKEN` and
    `MCP_CHATWOOT_API_ACCESS_TOKEN`; set `CHATWOOT_ACCOUNT_ID`/`MCP_CHATWOOT_ACCOUNT_ID` from the
-   account id in the Chatwoot URL (`/app/accounts/<id>/...`).
-4. `docker compose up -d mcp-server ai-service` to restart those two with the token loaded.
+   account id shown on the Account Settings page (also visible in the URL as
+   `/app/accounts/<id>/...`).
+4. `docker compose up -d mcp-server` to restart it with the token loaded (and `ai-service` too,
+   if you're running the fully automated pipeline rather than driving MCP tools by hand).
 
 ### 4. Register the webhook, labels, and custom attributes
+
+This step depends on `docker-compose.yml`'s `SAFE_FETCH_ALLOW_PRIVATE_NETWORK=true` on the
+Chatwoot services (already set by default) — Chatwoot refuses to deliver webhooks to private-network
+hostnames otherwise, which includes every other container on this same Compose network. See the
+comment above that env var in `docker-compose.yml`, or PROJECT_JOURNAL.md, Milestone 2, if
+you're curious why.
 
 These scripts run on the host (not in a container) and only need `httpx`:
 
