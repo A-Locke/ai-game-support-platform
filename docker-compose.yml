@@ -1,0 +1,142 @@
+x-chatwoot-env: &chatwoot-env
+  SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+  RAILS_ENV: production
+  NODE_ENV: production
+  INSTALLATION_ENV: docker
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  POSTGRES_USERNAME: postgres
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatwoot}
+  POSTGRES_DATABASE: ${POSTGRES_DATABASE:-chatwoot}
+  REDIS_URL: redis://redis:6379
+
+services:
+  postgres:
+    # Chatwoot's schema requires the pgvector extension (used by its native AI/RubyLLM
+    # features) -- plain postgres:16 fails db:chatwoot_prepare with
+    # 'extension "vector" is not available'. pgvector/pgvector ships it preinstalled.
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatwoot}
+      POSTGRES_DB: ${POSTGRES_DATABASE:-chatwoot}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: runs migrations + seed data (the Procfile's "release" phase -- the Chatwoot
+  # image does not run this automatically on boot, unlike some other Rails app images).
+  # `chatwoot` and `chatwoot-sidekiq` wait for this to exit 0 before starting.
+  chatwoot-prepare:
+    image: chatwoot/chatwoot:latest
+    environment:
+      <<: *chatwoot-env
+    entrypoint: docker/entrypoints/rails.sh
+    command: ["bundle", "exec", "rails", "db:chatwoot_prepare"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  chatwoot:
+    image: chatwoot/chatwoot:latest
+    restart: unless-stopped
+    depends_on:
+      chatwoot-prepare:
+        condition: service_completed_successfully
+    environment:
+      <<: *chatwoot-env
+    entrypoint: docker/entrypoints/rails.sh
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+    ports:
+      - "3000:3000"
+    volumes:
+      - chatwoot_storage:/app/storage
+    healthcheck:
+      # wget/curl aren't guaranteed present in the Chatwoot image; Ruby always is.
+      test: ["CMD", "ruby", "-rnet/http", "-ruri", "-e", "exit(Net::HTTP.get_response(URI('http://localhost:3000')).code.to_i < 500)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  chatwoot-sidekiq:
+    image: chatwoot/chatwoot:latest
+    restart: unless-stopped
+    depends_on:
+      chatwoot-prepare:
+        condition: service_completed_successfully
+    environment:
+      <<: *chatwoot-env
+    entrypoint: docker/entrypoints/rails.sh
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    volumes:
+      - chatwoot_storage:/app/storage
+
+  mcp-server:
+    build:
+      context: ./mcp-server
+    restart: unless-stopped
+    environment:
+      MCP_CHATWOOT_BASE_URL: http://chatwoot:3000
+      MCP_CHATWOOT_ACCOUNT_ID: ${CHATWOOT_ACCOUNT_ID:-1}
+      MCP_CHATWOOT_API_ACCESS_TOKEN: ${MCP_CHATWOOT_API_ACCESS_TOKEN:-${CHATWOOT_API_ACCESS_TOKEN}}
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN}
+      MCP_ENABLE_MUTATIONS: ${MCP_ENABLE_MUTATIONS:-true}
+      MCP_HTTP_HOST: 0.0.0.0
+      MCP_HTTP_PORT: 8100
+      MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-INFO}
+    ports:
+      - "8100:8100"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: ai-service/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - mcp-server
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+      MCP_SERVER_URL: http://mcp-server:8100/mcp
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN}
+      AI_WEBHOOK_SHARED_SECRET: ${AI_WEBHOOK_SHARED_SECRET}
+      SUPPORT_CATEGORIES: ${SUPPORT_CATEGORIES:-Bug,Crash,Gameplay,Technical,Installation,Account,Performance,Billing,Feedback,Other}
+      GAME_DATA_DIR: /app/game-data
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:
+  chatwoot_storage:

@@ -1,0 +1,21 @@
+# Overlay for the single-VM cloud path (docs/setup.md, Path A). Adds Caddy for automatic
+# HTTPS. Usage: docker compose -f docker-compose.yml -f deployment/cloud/docker-compose.cloud.yml up -d
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - chatwoot
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deployment/cloud/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

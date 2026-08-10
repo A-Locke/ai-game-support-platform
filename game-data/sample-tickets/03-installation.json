@@ -1,0 +1,8 @@
+{
+  "scenario": "installation",
+  "contact": {
+    "name": "Priya Natarajan",
+    "email": "priya.n@example.test"
+  },
+  "message": "Installer gets stuck at 87% and then throws error code E-4021. I've tried restarting and reinstalling twice. Windows 11, plenty of free disk space."
+}

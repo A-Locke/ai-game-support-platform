@@ -1,0 +1,3 @@
+{$DOMAIN} {
+	reverse_proxy chatwoot:3000
+}
