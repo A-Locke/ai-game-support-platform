@@ -28,7 +28,10 @@ is schema-constrained rather than free-text JSON the code has to hope is well-fo
 [ADR 0001, D7](adr/0001-architecture-and-tech-stack.md#d7-structured-claude-output-via-forced-tool-use-not-prompt-embedded-json).
 The prompt includes the conversation's messages plus a short excerpt of the knowledge base
 (known issues / FAQ) so the model can ground `reason` and `draft_response` in real product
-context instead of guessing.
+context instead of guessing. When configured, it also includes real matches from Jira and/or
+Azure DevOps (`app/grounding.py`, searched using the first customer message as a short query) —
+see [ADR 0004](adr/0004-issue-tracker-grounding.md). Both are optional and independent; a tracker
+outage degrades to "no extra context," never a blocked classification.
 
 ```json
 {

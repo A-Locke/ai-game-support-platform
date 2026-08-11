@@ -25,6 +25,15 @@ class Settings(BaseSettings):
 
     knowledge_base_dir: str = "knowledge-base"
 
+    # Optional issue-tracker grounding (docs/adr/0004) -- each source is independently optional;
+    # an empty *_MCP_URL means that source is skipped, not an error.
+    jira_mcp_url: str = ""
+    jira_mcp_api_token: str = ""
+    jira_jql_project_filter: str = ""  # e.g. "project = SUPPORT" -- prepended to the search JQL
+    azure_devops_mcp_url: str = ""
+    azure_devops_mcp_pat: str = ""
+    grounding_max_results: int = 3
+
     log_level: str = "INFO"
 
     @property

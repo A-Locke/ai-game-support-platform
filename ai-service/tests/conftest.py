@@ -11,6 +11,10 @@ def configured_settings():
     settings.mcp_auth_token = "test-mcp-token"
     settings.ai_webhook_shared_secret = "test-webhook-secret"
     settings.support_categories = "Bug,Crash,Technical,Installation,Account,Performance,Billing,Feature Request,Feedback,Other"
+    settings.jira_mcp_url = ""
+    settings.jira_mcp_api_token = ""
+    settings.azure_devops_mcp_url = ""
+    settings.azure_devops_mcp_pat = ""
     yield
 
 

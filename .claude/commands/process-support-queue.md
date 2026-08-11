@@ -9,6 +9,13 @@ docs/mcp-server.md and `.mcp.json`). This is a manually-maintained mirror of the
 implementation, not generated from it -- see docs/adr/0003, D6. If `SUPPORT_CATEGORIES` in `.env`
 has been changed from its default, use that list instead of the one below.
 
+**Optional real grounding** (see [ADR 0004](../../docs/adr/0004-issue-tracker-grounding.md)): if
+Atlassian's official Jira MCP server and/or Microsoft's official Azure DevOps MCP server are
+*also* connected to this session, use their search tools (`searchJiraIssuesUsingJql`,
+`mcp_ado_search_workitem`) in step 4 below alongside the static `knowledge-base/` files -- same
+grounding `ai-service` does automatically, no extra code needed here since this is just another
+MCP connector.
+
 ## Scope
 
 Parse $ARGUMENTS:

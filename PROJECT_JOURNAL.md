@@ -390,3 +390,66 @@ second run. Test counts: `mcp-server` 20 → 22, `ai-service` 21 → 26.
   follow-up check.
 
 ---
+
+## Milestone 6 — Real issue-tracker grounding (Jira, Azure DevOps)
+
+**Status:** complete
+**Date started:** 2026-08-11
+**Date completed:** 2026-08-11
+
+### Context
+
+The project owner asked directly whether the KI-014 "known issue" match demonstrated in
+Milestone 2 was fabricated. Answered honestly: yes — it was this session reading a static
+`knowledge-base/known-issues/*.md` fixture file and reasoning about the match itself, not a
+query against any real system. Asked for real grounding against an actual Jira and/or Azure
+DevOps backlog, and to evaluate implementation approaches first (own Python orchestration,
+Anthropic's native MCP connector, Azure Copilot Agents) before building. Full evaluation and
+decision in [ADR 0004](docs/adr/0004-issue-tracker-grounding.md) — own orchestration via Python
+was chosen; scope confirmed as Jira + Azure DevOps, with the design-doc RAG piece explicitly
+deferred.
+
+### What was built
+
+Before writing any integration code, looked up the *actual* tool names each official MCP server
+exposes rather than guessing — exactly the kind of fabrication the project owner had just flagged
+as a concern. Confirmed via each project's own documentation:
+[`searchJiraIssuesUsingJql`](https://github.com/atlassian/atlassian-mcp-server) (Atlassian's
+official remote MCP server) and
+[`mcp_ado_search_workitem`](https://github.com/microsoft/azure-devops-mcp/blob/main/docs/TOOLSET.md)
+(Microsoft's official Azure DevOps MCP server).
+
+`ai-service/app/grounding.py` connects to both as an MCP client (the same `fastmcp.Client`
+pattern `mcp_client.py` already uses for `support-mcp-server`), searches using the first customer
+message as a short query, and folds real results into `claude_client.py`'s existing prompt
+alongside the static knowledge-base excerpt — still one forced Claude tool call, no new agentic
+loop. Each source is independently optional and fails independently (a tracker outage degrades to
+"no extra context," never a blocked classification). The Claude-routine command
+(`process-support-queue.md`) needed no new code for the MCP-only mode — just a note that the same
+official servers can be added as connectors there too, since `mcp-server`'s whole design has
+always been client-agnostic (ADR 0001).
+
+### Honesty note: this is the one piece not live-verified
+
+Every other feature in this project was run against real infrastructure before being called done.
+This one wasn't — no Jira or Azure DevOps credentials were available in this environment. The
+tool *names* above are confirmed from official documentation; the exact response *shape* each
+tool returns was not independently verified against a live call. `_normalize_jira`/`_normalize_ado`
+parse defensively (`.get()` with fallbacks, multiple shape guesses) specifically because of this,
+and both the code and [ADR 0004](docs/adr/0004-issue-tracker-grounding.md) say so explicitly
+rather than presenting it as verified. What *was* verified: the plumbing around it -- rebuilt and
+redeployed `ai-service` with `grounding.py` wired into the live stack (both `*_MCP_URL` vars
+unset, matching a real "not configured yet" deployment) and confirmed `python -m app.cli process`
+still completes cleanly, proving the integration doesn't break anything when inert. 10 new tests
+(mocked MCP responses) cover the normalizers and the independent-failure behavior; ai-service
+test count: 26 → 36.
+
+### Follow-up
+
+Real verification against an actual Jira and/or Azure DevOps instance is the natural next step
+once credentials are available — treat the first real run as the actual test of
+`_normalize_jira`/`_normalize_ado`, and adjust them if a real response shape differs from what's
+assumed. The design-doc RAG piece remains deferred (no official MCP server exists for it, unlike
+Jira/Azure DevOps, so it would need a real build when picked back up).
+
+---

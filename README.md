@@ -57,7 +57,9 @@ Full detail in [docs/architecture.md](docs/architecture.md).
 | **Human escalation + draft** | Flags conversations needing a human, with a reasoning note; optionally drafts a suggested reply as a private, agent-only note — never auto-sent. |
 
 Full detail, including error handling and idempotency, in
-[docs/ai-workflows.md](docs/ai-workflows.md).
+[docs/ai-workflows.md](docs/ai-workflows.md). Classification can optionally be grounded against
+real Jira and/or Azure DevOps issues (each independently optional) instead of relying solely on
+the static demo knowledge base — see [ADR 0004](docs/adr/0004-issue-tracker-grounding.md).
 
 ## MCP server
 
@@ -131,7 +133,8 @@ docs/              Architecture, AI workflows, MCP reference, setup, cost, ADRs
 ## Future extensions
 
 Third-party account context (CRM, billing provider) · automatic duplicate bug detection ·
-Jira/Azure DevOps integration · a QA MCP integration (customer report → known issue →
+design-doc RAG grounding (Jira/Azure DevOps grounding already implemented — see
+[ADR 0004](docs/adr/0004-issue-tracker-grounding.md)) · a QA MCP integration (customer report → known issue →
 regression test → bug tracker; see
 [docs/architecture.md](docs/architecture.md#future-integration-direction-not-implemented)) ·
 automatic reproduction-test generation · knowledge-base maintenance · multilingual support ·

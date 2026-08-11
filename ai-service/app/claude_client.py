@@ -9,6 +9,7 @@ from anthropic import AsyncAnthropic
 from pydantic import ValidationError
 
 from app.config import settings
+from app.grounding import search_related_issues
 from app.knowledge import load_knowledge_excerpt
 from app.models import ClassificationResult
 
@@ -56,11 +57,20 @@ def _classification_tool_schema(categories: list[str]) -> dict:
     }
 
 
-def _build_prompt(conversation_messages: list[str]) -> str:
+async def _build_prompt(conversation_messages: list[str]) -> str:
     transcript = "\n".join(conversation_messages) if conversation_messages else "(no messages)"
+
+    # Real issue-tracker grounding (docs/adr/0004), optional and additive to the static
+    # knowledge-base excerpt below -- searched using the first customer message as a short,
+    # representative query rather than the full transcript.
+    grounding = ""
+    if conversation_messages:
+        grounding = await search_related_issues(conversation_messages[0][:200])
+    grounding_section = f"\n\n{grounding}" if grounding else ""
+
     return (
         "You are triaging a customer support conversation for a software product.\n\n"
-        f"Known issues / FAQ context:\n{load_knowledge_excerpt()}\n\n"
+        f"Known issues / FAQ context:\n{load_knowledge_excerpt()}{grounding_section}\n\n"
         f"Conversation transcript (customer messages):\n{transcript}\n\n"
         "Classify this conversation by calling record_classification."
     )
@@ -75,6 +85,7 @@ async def classify_conversation(conversation_messages: list[str]) -> Classificat
     # exactly that -- two HTTP calls total, not up to eight.
     client = AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=0)
     categories = settings.categories
+    prompt = await _build_prompt(conversation_messages)
 
     for attempt in range(2):
         try:
@@ -83,7 +94,7 @@ async def classify_conversation(conversation_messages: list[str]) -> Classificat
                 max_tokens=1024,
                 tools=[_classification_tool_schema(categories)],
                 tool_choice={"type": "tool", "name": _CLASSIFY_TOOL_NAME},
-                messages=[{"role": "user", "content": _build_prompt(conversation_messages)}],
+                messages=[{"role": "user", "content": prompt}],
             )
             break
         except Exception as exc:
