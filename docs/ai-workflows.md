@@ -98,8 +98,10 @@ flowchart LR
 `human-escalated` label and a private note explaining *why* (the model's `reason` field) so an
 agent doesn't have to re-derive the classification. If the model also produced a
 `draft_response`, it's stored via `create_draft_response` — a private note an agent can copy
-into a real reply, edit, or discard. This is the brief's hard constraint (§3.D, §10): **the AI
-must not automatically send customer-facing responses in this version.**
+into a real reply, edit, or discard. This started as the brief's v1 constraint (§3.D, §10) and is
+now a **permanent** one, independent of confidence or any other signal — see
+[ADR 0005](adr/0005-no-direct-ai-to-customer-interface.md). The AI never sends a customer-facing
+response, full stop; it drafts, a human decides.
 
 ## Idempotency
 

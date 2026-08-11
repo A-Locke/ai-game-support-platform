@@ -453,3 +453,47 @@ assumed. The design-doc RAG piece remains deferred (no official MCP server exist
 Jira/Azure DevOps, so it would need a real build when picked back up).
 
 ---
+
+## Milestone 7 — Confidence honesty check, and a permanent no-auto-send decision
+
+**Status:** complete (documentation/scope decision, no code change)
+**Date started:** 2026-08-11
+**Date completed:** 2026-08-11
+
+### What happened
+
+While scoping possible next extensions (LinkedIn post drafted first — see the CV/post workflow,
+unrelated to the platform itself), the project owner asked directly: is the `confidence` field
+real, or was it faked during the Milestone 2 demo like the KI-014 match already admitted to be?
+
+Answered honestly: **`confidence` has always been self-reported by Claude as part of the same
+structured tool call that produces `category`/`reason`/`draft_response` — there is no independent
+calculation behind it, and there still isn't even with real Jira/Azure DevOps grounding wired in
+(Milestone 6). `grounding.py` returns search hits with no similarity/relevance score attached; the
+model reads a list of text and self-assesses.** During the live Milestone 2 demo specifically,
+those confidence numbers were this session typing plausible values based on its own judgment —
+the same category of fabrication as the known-issue match, not something separately verified.
+
+This surfaced a real risk: a "confidence-gated automation" feature (auto-send above some
+threshold) was under active discussion as a next extension at the time. Building that on top of
+an uncalibrated self-reported number would have been automation safety resting on fabricated
+data.
+
+The project owner then stated, independent of the confidence question, that EU legislation
+requires either human approval or clear AI-generated labeling before an AI-produced message
+reaches a customer, and asked to rule out *any* direct AI-to-customer interface permanently, not
+just for now. This closes the confidence-gating question outright: **[ADR 0005](docs/adr/0005-no-direct-ai-to-customer-interface.md)**
+records that no confidence score, real or fabricated, will ever authorize an automatic send — the
+fix for "confidence isn't real" is surfacing the real signal to the human reviewer, not removing
+the human. `README.md`'s Future Extensions and `docs/ai-workflows.md` updated to state this as a
+permanent constraint rather than "not in v1."
+
+### Consequences for what's next
+
+"Confidence-gated automation" is removed from consideration entirely. Auto-linking duplicates and
+a human-feedback-loop-on-draft-quality remain viable (neither sends anything to the customer). A
+real/self-reported confidence split (surfacing actual grounding-match strength to the human
+reviewer, never used to bypass them) is still worth building for reviewer speed — proposed, not
+yet implemented as of this entry.
+
+---

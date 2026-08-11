@@ -138,7 +138,12 @@ design-doc RAG grounding (Jira/Azure DevOps grounding already implemented — se
 regression test → bug tracker; see
 [docs/architecture.md](docs/architecture.md#future-integration-direction-not-implemented)) ·
 automatic reproduction-test generation · knowledge-base maintenance · multilingual support ·
-confidence-based automation · human feedback loops.
+a human feedback loop on draft quality (edited/accepted/discarded, not autonomy).
+
+**Permanently out of scope, not just deferred:** any workflow where the AI sends something to a
+customer directly, at any confidence level — see
+[ADR 0005](docs/adr/0005-no-direct-ai-to-customer-interface.md). Every AI action in this project
+lands as a tag, attribute, or private note for a human to act on; that boundary doesn't move.
 
 ## Status
 
