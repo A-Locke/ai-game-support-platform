@@ -39,12 +39,22 @@ regardless of model choice.
 **$0.** Chatwoot Community Edition is free, self-hosted, open source — no per-agent or
 per-conversation licensing.
 
+## Backups
+
+| Driver | Estimate |
+|---|---|
+| S3 storage | A `pg_dump -Fc` of a demo-scale Chatwoot database is a few hundred KB to low single-digit MB, compressed. At the default 14-day retention (`BACKUP_RETENTION_DAYS`) and one backup/day, that's well under 100 MB retained — a few cents/month on AWS S3 standard storage, or **$0** on providers with a free tier that covers this (e.g. Cloudflare R2, Backblaze B2's free 10 GB). |
+| S3 requests | One `PUT` + a handful of `LIST`/`DELETE` calls per day — negligible, effectively free at any provider's pricing. |
+
+See [ADR 0002](adr/0002-postgres-backup-and-recovery.md) for the backup design; cost only applies
+once `S3_BUCKET` is configured — it's opt-in.
+
 ## Summed estimate
 
-| Path | Infra | Claude API | Total |
-|---|---|---|---|
-| A — single VM | $12–24/mo | <$5/mo | **~$15–30/mo** |
-| B — VM + Cloud Run | $10–17/mo | <$5/mo | **~$15–22/mo** |
+| Path | Infra | Claude API | Backups | Total |
+|---|---|---|---|---|
+| A — single VM | $12–24/mo | <$5/mo | ~$0–1/mo | **~$15–30/mo** |
+| B — VM + Cloud Run | $10–17/mo | <$5/mo | ~$0–1/mo | **~$15–23/mo** |
 
 ## Optional future services (not included above)
 

@@ -117,9 +117,10 @@ webhook, and load the demo.
 ```
 ai-service/        AI orchestration (FastAPI): webhook receiver, Claude client, workflows
 mcp-server/        Self-hosted MCP server: Chatwoot tool abstraction
+backup/            Scheduled Postgres -> S3 backup/restore (docs/adr/0002)
 knowledge-base/    "ExampleCo" (fictional product) FAQ, known issues, release notes, sample tickets
 deployment/        Cloud Compose overlay (Caddy) and deployment notes
-scripts/           Chatwoot configuration, demo seeding
+scripts/           Chatwoot configuration, demo seeding, backup/restore triggers
 docs/              Architecture, AI workflows, MCP reference, setup, cost, ADRs
 ```
 

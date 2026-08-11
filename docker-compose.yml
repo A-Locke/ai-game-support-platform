@@ -97,6 +97,31 @@ services:
     volumes:
       - chatwoot_storage:/app/storage
 
+  # Scheduled Postgres -> S3 backups, always on but inert until S3_BUCKET is set (see
+  # docs/adr/0002, D8). Manual trigger: scripts/backup_now.sh. Restore: scripts/restore_from_s3.sh.
+  backup:
+    build:
+      context: ./backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatwoot}
+      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-chatwoot}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_BACKUP_PREFIX: ${S3_BACKUP_PREFIX:-chatwoot-backups}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_CRON_SCHEDULE: ${BACKUP_CRON_SCHEDULE:-0 3 * * *}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
   mcp-server:
     build:
       context: ./mcp-server

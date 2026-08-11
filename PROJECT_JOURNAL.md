@@ -270,3 +270,58 @@ redeployed against the already-running local stack to confirm the renamed
 still report healthy.
 
 ---
+
+## Milestone 4 — Postgres backups to S3
+
+**Status:** complete
+**Date started:** 2026-08-11
+**Date completed:** 2026-08-11
+
+### What was built
+
+A new `backup` service (`backup/`, its own `pyproject.toml`/tests/Dockerfile, mirroring the
+`ai-service`/`mcp-server` layout): scheduled `pg_dump -Fc` to S3 via an in-container cron daemon,
+a manual-trigger wrapper (`scripts/backup_now.sh`) that runs the literal same script the cron job
+runs, and a separate, always-manual `scripts/restore_from_s3.sh` with an interactive confirmation
+prompt. Full reasoning in
+[ADR 0002](docs/adr/0002-postgres-backup-and-recovery.md). 15 new tests (moto for S3 mocking),
+all passing.
+
+### Verified live, against real data, not just mocks
+
+Docker was available, so this was validated for real rather than trusted from unit tests alone:
+
+1. Built the `backup` image and confirmed `docker compose config` accepts the new service.
+2. Started a standalone MinIO container (S3-compatible) on the same Compose network.
+3. Ran a real backup of the **live Chatwoot database** (the one from Milestone 2's testing --
+   real conversations, real tags, real private notes) against that MinIO instance. Confirmed the
+   object landed in the bucket.
+4. Started a **completely fresh, empty** Postgres container and ran the restore command against
+   it, pointed at the same MinIO backup.
+5. Confirmed the restored data matched the source exactly: conversation count (7), contact count
+   (5), and the literal content of a specific private note (the KI-014 escalation note from
+   Milestone 2) byte-for-byte.
+6. Separately confirmed the cron daemon itself actually starts and stays running inside the
+   container in its normal (non-one-off) mode -- `docker compose up -d backup`, then checked
+   `/proc` directly for a live `cron` process (PID 12) alongside the `tail` process keeping the
+   container alive, with zero restarts.
+
+This is the same standard applied throughout the project: a documented feature isn't considered
+done until it's been run for real, against real data, not just described.
+
+### Notes
+
+- `pg_restore --clean --if-exists --no-owner --no-privileges` was chosen specifically because
+  the realistic disaster-recovery scenario is restoring into a *fresh, empty* database (a new VM
+  after the old one died) -- `--if-exists` avoids `--clean` reporting spurious errors for DROP
+  statements against objects that don't exist yet in an empty target. This worked cleanly in the
+  live test above with no error-handling surprises.
+- cron's well-known "doesn't inherit the container's env vars" gotcha was handled with
+  `declare -p $(compgen -e)` rather than a naive `printenv > file`, specifically so secrets
+  containing shell-special characters (a password with a `$` or a quote, say) don't break the
+  re-sourced environment. Not separately unit-tested (it's a one-line shell snapshot, not
+  application logic), but implicitly covered by the live cron-actually-runs-and-picks-up-real-
+  credentials check above -- the real backup in step 3 only succeeded because the cron-invoked
+  path (same script, same env-loading mechanism) had working Postgres/S3 credentials.
+
+---

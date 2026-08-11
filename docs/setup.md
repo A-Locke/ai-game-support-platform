@@ -95,6 +95,56 @@ Chatwoot instance and prints the resulting classification, tags, and any draft r
 `ai-service` has processed them (a few seconds). See the demo scenarios in the [top-level
 README](../README.md#demo-scenarios).
 
+## Backups
+
+The `backup` service dumps the Chatwoot Postgres database to S3 on a schedule (default: daily at
+03:00 UTC) and always runs, but does nothing until `S3_BUCKET` is set in `.env` — with it unset,
+it logs a message and exits cleanly. Works with AWS S3 or any S3-compatible provider (MinIO,
+Backblaze B2, DigitalOcean Spaces, Cloudflare R2) via `S3_ENDPOINT_URL`. See
+[ADR 0002](adr/0002-postgres-backup-and-recovery.md) for the full reasoning.
+
+Set in `.env`:
+
+```bash
+S3_BUCKET=your-bucket-name
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+# Only for non-AWS providers, e.g. S3_ENDPOINT_URL=http://minio:9000
+S3_ENDPOINT_URL=
+```
+
+Then `docker compose up -d backup` (or just `docker compose up -d`, since it's already part of
+the default stack).
+
+### Manual backup
+
+```bash
+./scripts/backup_now.sh
+```
+
+Runs the exact same script the cron schedule runs — see ADR 0002, D5. Useful to confirm your S3
+credentials actually work, or to take a backup before a risky change (a migration, a manual
+`db:chatwoot_prepare` re-run, etc.).
+
+### Restore
+
+```bash
+./scripts/restore_from_s3.sh                # restores the most recent backup, with a confirmation prompt
+./scripts/restore_from_s3.sh --key chatwoot-backups/chatwoot-20260811T030000Z.dump
+./scripts/restore_from_s3.sh --yes           # skip the confirmation prompt (scripted use only)
+```
+
+This is destructive — it drops and replaces data in the target database. It is never triggered
+automatically by anything in this project (see ADR 0002, D6); it always requires this explicit
+command, and prompts for a typed `yes` unless `--yes` is passed. Typical disaster-recovery use:
+point `POSTGRES_HOST`/`POSTGRES_DATABASE` at a fresh, empty database (a new VM after the old one
+died, for example) before running it.
+
+This was validated live during development: a real backup of a live Chatwoot database was taken,
+restored into a completely fresh Postgres container, and the row counts and message content were
+confirmed to match exactly (see PROJECT_JOURNAL.md, Milestone 4).
+
 ## Cloud deployment
 
 Two paths are documented. Both keep Chatwoot on an always-on VM — it needs Postgres, Redis, and
