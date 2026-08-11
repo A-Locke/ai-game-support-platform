@@ -143,10 +143,14 @@ services:
       timeout: 5s
       retries: 5
 
+  # Opt-in: the automated webhook-driven pipeline, needing ANTHROPIC_API_KEY. Not started by
+  # `docker compose up -d` alone -- use `docker compose --profile automated up -d`, or run
+  # `python -m app.cli` / a Claude Code MCP routine instead. See docs/adr/0003.
   ai-service:
     build:
       context: .
       dockerfile: ai-service/Dockerfile
+    profiles: ["automated"]
     restart: unless-stopped
     depends_on:
       - mcp-server

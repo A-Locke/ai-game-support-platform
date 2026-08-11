@@ -58,12 +58,21 @@ class ChatwootClient:
     async def search_conversations(
         self, query: str | None = None, status: str | None = None, page: int = 1
     ) -> dict:
+        """Search or list conversations. Chatwoot's two underlying endpoints here disagree on
+        response shape -- GET /conversations/search (query given) returns {"meta", "payload"}
+        at the top level, but GET /conversations (no query) nests the exact same shape under a
+        "data" key: {"data": {"meta", "payload"}}. Found live (a CLI batch sweep silently found
+        "no open conversations" against a database that had six). Unwrapped here so this tool's
+        callers see one consistent shape regardless of which internal endpoint was used --
+        that's an implementation detail, not something callers should need to know.
+        """
         params: dict[str, Any] = {"page": page}
         if status:
             params["status"] = status
         if query:
             return await self._request("GET", "/conversations/search", params={"q": query, **params})
-        return await self._request("GET", "/conversations", params=params)
+        result = await self._request("GET", "/conversations", params=params)
+        return result.get("data", result)
 
     async def get_conversation_messages(self, conversation_id: int) -> dict:
         return await self._request("GET", f"/conversations/{conversation_id}/messages")

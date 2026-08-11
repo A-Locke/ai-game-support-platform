@@ -30,16 +30,18 @@ else has a working local default.
 docker compose up -d
 ```
 
-This starts Postgres, Redis, Chatwoot (web + Sidekiq worker), `mcp-server`, and `ai-service`.
-A one-shot `chatwoot-prepare` service runs Chatwoot's database migrations before `chatwoot` and
-`chatwoot-sidekiq` start (Chatwoot's image doesn't run migrations on its own — see
-[PROJECT_JOURNAL.md, Milestone 1](../PROJECT_JOURNAL.md) if you're curious why). Give it a
-minute, then check:
+This starts Postgres, Redis, Chatwoot (web + Sidekiq worker), `mcp-server`, and `backup` (inert
+until S3 is configured — see [Backups](#backups)). **`ai-service` is not included** — it's an
+opt-in profile (see [AI orchestration modes](#ai-orchestration-modes) below); add
+`--profile automated` to include it, or skip it entirely and drive `mcp-server` directly from a
+Claude Code session or `ai-service`'s own CLI instead. A one-shot `chatwoot-prepare` service runs
+Chatwoot's database migrations before `chatwoot` and `chatwoot-sidekiq` start (Chatwoot's image
+doesn't run migrations on its own — see [PROJECT_JOURNAL.md, Milestone 1](../PROJECT_JOURNAL.md)
+if you're curious why). Give it a minute, then check:
 
 ```bash
 docker compose ps
 curl -I http://localhost:3000/      # Chatwoot -- 302 to the onboarding wizard means it's up
-curl http://localhost:8000/health   # ai-service
 curl http://localhost:8100/health   # mcp-server
 ```
 
@@ -62,13 +64,7 @@ authenticate against yet) — this one step is a manual UI action:
 4. `docker compose up -d mcp-server` to restart it with the token loaded (and `ai-service` too,
    if you're running the fully automated pipeline rather than driving MCP tools by hand).
 
-### 4. Register the webhook, labels, and custom attributes
-
-This step depends on `docker-compose.yml`'s `SAFE_FETCH_ALLOW_PRIVATE_NETWORK=true` on the
-Chatwoot services (already set by default) — Chatwoot refuses to deliver webhooks to private-network
-hostnames otherwise, which includes every other container on this same Compose network. See the
-comment above that env var in `docker-compose.yml`, or PROJECT_JOURNAL.md, Milestone 2, if
-you're curious why.
+### 4. Register labels and custom attributes (and the webhook, for automated mode)
 
 These scripts run on the host (not in a container) and only need `httpx`:
 
@@ -77,12 +73,16 @@ pip install -r scripts/requirements.txt
 python scripts/configure_chatwoot.py
 ```
 
-This is idempotent — it registers `ai-service`'s webhook URL
-(`http://ai-service:8000/webhooks/chatwoot`) for the `message_created` event, creates the
-labels used by the AI workflows (`spam`, `human-escalated`, `ai-draft`, plus one per configured
-category), and creates the custom attributes `ai_category`, `ai_confidence`, and
-`ai_last_processed_message_id`. Only `message_created` is registered, not
-`conversation_created` — see [ai-workflows.md](ai-workflows.md#trigger) for why.
+This is idempotent — it creates the labels the AI workflows use (`spam`, `human-escalated`,
+`ai-draft`, plus one per configured category), the custom attributes `ai_category`,
+`ai_confidence`, and `ai_last_processed_message_id`, and (only relevant for **automated mode**,
+below) registers `ai-service`'s webhook URL for the `message_created` event. Only
+`message_created` is registered, not `conversation_created` — see
+[ai-workflows.md](ai-workflows.md#trigger) for why. Webhook delivery depends on
+`docker-compose.yml`'s `SAFE_FETCH_ALLOW_PRIVATE_NETWORK=true` on the Chatwoot services (already
+set by default) — Chatwoot refuses to deliver webhooks to private-network hostnames otherwise,
+which includes every other container on this same Compose network. See the comment above that
+env var in `docker-compose.yml`, or PROJECT_JOURNAL.md, Milestone 2, if you're curious why.
 
 ### 5. Load the demo scenario
 
@@ -91,9 +91,50 @@ python scripts/run_demo.py
 ```
 
 Creates the three demo conversations from `knowledge-base/sample-tickets/` against your local
-Chatwoot instance and prints the resulting classification, tags, and any draft response once
-`ai-service` has processed them (a few seconds). See the demo scenarios in the [top-level
-README](../README.md#demo-scenarios).
+Chatwoot instance. What happens next depends on which [AI orchestration mode](#ai-orchestration-modes)
+you're running — see that section for how to actually process them. See the demo scenarios in
+the [top-level README](../README.md#demo-scenarios).
+
+## AI orchestration modes
+
+Three ways to run the same classify/tag/escalate/draft logic — pick one (see
+[ADR 0003](adr/0003-ai-orchestration-deployment-modes.md) for the full reasoning):
+
+### Automated (`ai-service`, webhook-driven)
+
+Needs `ANTHROPIC_API_KEY`. Starts a persistent server that reacts to Chatwoot webhooks in real
+time.
+
+```bash
+docker compose --profile automated up -d
+```
+
+### CLI (`ai-service`'s own logic, on demand)
+
+Also needs `ANTHROPIC_API_KEY`, but no persistent server or webhook — useful for a one-off
+reprocess, a periodic batch job instead of a live webhook receiver, or catching up after
+`ai-service` was down. Runs the exact same workflow code as automated mode
+([ADR 0003, D1](adr/0003-ai-orchestration-deployment-modes.md#d1-a-cli-entry-point-reuses-the-exact-same-workflow-function-the-webhook-handler-calls)):
+
+```bash
+docker compose run --rm ai-service python -m app.cli process-unprocessed
+docker compose run --rm ai-service python -m app.cli process <conversation_id> <message_id>
+```
+
+### Claude routine (MCP-only, no `ai-service`, no API key)
+
+No `ANTHROPIC_API_KEY` and no `ai-service` at all — a Claude Code session (yours, or a scheduled
+routine) drives `mcp-server`'s tools directly, acting as the classifier itself. This is exactly
+how the whole platform was validated in PROJECT_JOURNAL.md, Milestone 2, before this mode existed
+as a documented feature.
+
+1. Register `mcp-server` as a project MCP connector — see [mcp-server.md](mcp-server.md) and the
+   `.mcp.json` pattern used during development (not committed; embeds a real bearer token).
+2. Run the `/process-support-queue` command (`.claude/commands/process-support-queue.md`) to
+   classify/tag/escalate open conversations, or `/support-report` for the reporting workflow.
+
+Both commands are manually-maintained mirrors of `ai-service`'s Python logic, not generated from
+it — see [ADR 0003, D6](adr/0003-ai-orchestration-deployment-modes.md#d6-the-playbook-is-a-manually-maintained-parallel-implementation-not-generated-from-python).
 
 ## Backups
 

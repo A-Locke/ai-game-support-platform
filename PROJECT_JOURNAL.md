@@ -325,3 +325,68 @@ done until it's been run for real, against real data, not just described.
   path (same script, same env-loading mechanism) had working Postgres/S3 credentials.
 
 ---
+
+## Milestone 5 — Decoupled AI orchestration: CLI mode and MCP-only/Claude-routine mode
+
+**Status:** complete
+**Date started:** 2026-08-11
+**Date completed:** 2026-08-11
+
+### What was built
+
+Three ways to run the same classification logic instead of one, per
+[ADR 0003](docs/adr/0003-ai-orchestration-deployment-modes.md): `ai-service` moved behind a
+Compose profile (`profiles: ["automated"]`) so the bare `docker compose up -d` no longer starts
+it -- a deliberate, called-out change from Milestones 1-2's documented default. A new
+`ai-service/app/cli.py` (`process` / `process-unprocessed`) reuses
+`workflows.classify.process_incoming_message` directly, no parallel logic. Two Claude Code
+commands (`.claude/commands/process-support-queue.md`, `support-report.md`) codify the exact
+procedure a human already performed manually in Milestone 2, so an MCP-connected session (or a
+scheduled Claude routine) can run the whole workflow with no `ai-service` and no Anthropic API
+key deployed anywhere.
+
+### Two more real bugs, found by actually running the new CLI against the live stack
+
+1. **`search_conversations` returns a different top-level shape depending on whether a query was
+   given.** `GET /conversations/search` (query given) returns `{"meta", "payload"}` at the top
+   level; `GET /conversations` (status-only, no query) nests the identical shape under a `"data"`
+   key. The CLI's batch sweep only checked for a top-level `"payload"` key, so it silently
+   reported "no open conversations found" against a database that had six. Root-caused by
+   comparing the raw JSON from both endpoints directly (`curl` against each). Fixed in
+   `chatwoot_client.py` by unwrapping the `"data"` key for the no-query path, so both code paths
+   return one consistent shape to every caller regardless of which internal Chatwoot endpoint was
+   used -- an implementation detail that shouldn't leak through the tool's contract.
+2. **The batch sweep used the conversation's overall last message for idempotency, which is
+   often the workflow's own note.** After fixing (1), the sweep processed every open conversation
+   correctly once -- then processed all of them *again* on the very next run, and would have kept
+   doing so forever. Cause: `create_internal_note`/`create_draft_response` each add a new message
+   to the conversation, so "the conversation's last message" after a successful run is the AI's
+   own note, not the customer message that was actually classified -- comparing that ever-moving
+   target against the stored `ai_last_processed_message_id` marker (set to the *customer*
+   message's id) could never match. This class of bug couldn't affect the webhook-driven path,
+   since Chatwoot's webhook payload always supplies the real triggering message id directly --
+   it was specific to the batch sweep's need to *infer* "the latest message" itself. Fixed by
+   extracting a shared `get_incoming_messages()` helper (customer messages only, filtered the
+   same way the classification prompt itself is built) and using the max id among *those*, not
+   the conversation's last message overall. Confirmed live: a second sweep after the fix showed
+   `status: skipped, reason: already_processed` for every conversation.
+
+### Verified live
+
+Rebuilt and redeployed `ai-service` and `mcp-server` after each fix (not just re-run against
+mocks): `docker exec ... python -m app.cli process-unprocessed` against the real six-conversation
+database correctly found and processed all of them once, then correctly skipped all of them on a
+second run. Test counts: `mcp-server` 20 → 22, `ai-service` 21 → 26.
+
+### Notes
+
+- The Claude-routine commands are intentionally a *manually-maintained* mirror of
+  `claude_client.py`'s prompt/schema, not generated from it (ADR 0003, D6) -- if
+  `SUPPORT_CATEGORIES` changes, both need updating by hand. Not yet re-validated live through an
+  actual `/process-support-queue` invocation in this milestone (the MCP connector session used
+  in Milestone 2 had already disconnected by the time this command was written) -- the command's
+  field names and tool call shapes were cross-checked against the real API responses observed
+  live during Milestones 2 and 5 instead, but a live run of the command itself remains a good
+  follow-up check.
+
+---

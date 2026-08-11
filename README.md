@@ -71,8 +71,12 @@ scale-to-zero model. Full tool reference and security model in
 
 ## Deployment
 
-**Local:** `docker compose up -d` runs the whole stack — Chatwoot, Postgres, Redis, `ai-service`,
-`mcp-server`. See [docs/setup.md](docs/setup.md#local-development).
+**Local:** `docker compose up -d` runs Chatwoot, Postgres, Redis, `mcp-server`, and scheduled
+backups. `ai-service` (the automated webhook pipeline) is opt-in —
+`docker compose --profile automated up -d` — since two other ways to run the same classification
+logic don't need it at all: a CLI mode, or driving `mcp-server` directly from a connected Claude
+Code session/routine. See [AI orchestration modes](docs/setup.md#ai-orchestration-modes) and
+[ADR 0003](docs/adr/0003-ai-orchestration-deployment-modes.md).
 
 **Cloud:** a single low-cost VM (Docker Compose + Caddy for automatic HTTPS) is the default
 path; `mcp-server` and `ai-service` are also individually deployable to Google Cloud Run for

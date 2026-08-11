@@ -15,20 +15,30 @@ logger = structlog.get_logger(__name__)
 IDEMPOTENCY_ATTRIBUTE = "ai_last_processed_message_id"
 
 
-_INCOMING = ("incoming", 0)  # Chatwoot's Application API returns the raw integer enum (0);
-# webhook payloads separately serialize it as the string "incoming" (see
+INCOMING_MESSAGE_TYPES = ("incoming", 0)  # Chatwoot's Application API returns the raw integer
+# enum (0); webhook payloads separately serialize it as the string "incoming" (see
 # app.models.ChatwootWebhookEvent). get_conversation_messages goes through the former path --
 # found live when a real message never matched this filter because it was compared as a string.
 
 
-async def _extract_player_messages(conversation_id: int) -> list[str]:
+async def get_incoming_messages(conversation_id: int) -> list[dict]:
+    """Real customer messages only -- excludes agent replies and the AI's own private notes.
+    Shared by the classification prompt builder below and by app.cli's batch sweep, which needs
+    the latest genuine customer message id (not "the conversation's last message", which is
+    often one of this workflow's own notes -- see docs/adr/0003, D3 and PROJECT_JOURNAL.md,
+    Milestone 5)."""
     payload = await mcp_client.call_tool("get_conversation_messages", conversation_id=conversation_id)
     messages = payload.get("payload", payload if isinstance(payload, list) else [])
     return [
-        m["content"]
+        m
         for m in messages
-        if isinstance(m, dict) and m.get("message_type") in _INCOMING and not m.get("private") and m.get("content")
+        if isinstance(m, dict) and m.get("message_type") in INCOMING_MESSAGE_TYPES and not m.get("private")
     ]
+
+
+async def _extract_player_messages(conversation_id: int) -> list[str]:
+    messages = await get_incoming_messages(conversation_id)
+    return [m["content"] for m in messages if m.get("content")]
 
 
 async def process_incoming_message(conversation_id: int, message_id: int) -> dict:

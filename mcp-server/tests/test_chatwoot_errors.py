@@ -55,3 +55,30 @@ async def test_api_access_token_header_is_sent(client):
     await client.get_conversation(1)
 
     assert route.calls.last.request.headers["api_access_token"] == "tok"
+
+
+@respx.mock
+async def test_search_conversations_unwraps_the_data_key_for_the_no_query_path(client):
+    # Regression test: found live -- GET /conversations (status-only, no query) nests its
+    # response under "data", unlike GET /conversations/search (query given), which returns the
+    # same {"meta", "payload"} shape at the top level. A CLI batch sweep silently saw "no open
+    # conversations" against a database that had six, because it only checked for a top-level
+    # "payload" key. Both code paths must return the identical shape to callers.
+    respx.get("http://chatwoot.test/api/v1/accounts/1/conversations").mock(
+        return_value=Response(200, json={"data": {"meta": {"all_count": 6}, "payload": [{"id": 1}]}})
+    )
+
+    result = await client.search_conversations(status="open")
+
+    assert result == {"meta": {"all_count": 6}, "payload": [{"id": 1}]}
+
+
+@respx.mock
+async def test_search_conversations_query_path_already_flat(client):
+    respx.get("http://chatwoot.test/api/v1/accounts/1/conversations/search").mock(
+        return_value=Response(200, json={"meta": {"all_count": 1}, "payload": [{"id": 2}]})
+    )
+
+    result = await client.search_conversations(query="crash")
+
+    assert result == {"meta": {"all_count": 1}, "payload": [{"id": 2}]}
