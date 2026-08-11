@@ -10,7 +10,7 @@ def configured_settings():
     settings.mcp_server_url = "http://mcp-server.test/mcp"
     settings.mcp_auth_token = "test-mcp-token"
     settings.ai_webhook_shared_secret = "test-webhook-secret"
-    settings.support_categories = "Bug,Crash,Gameplay,Technical,Installation,Account,Performance,Billing,Feedback,Other"
+    settings.support_categories = "Bug,Crash,Technical,Installation,Account,Performance,Billing,Feature Request,Feedback,Other"
     yield
 
 

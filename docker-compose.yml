@@ -131,8 +131,8 @@ services:
       MCP_SERVER_URL: http://mcp-server:8100/mcp
       MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN}
       AI_WEBHOOK_SHARED_SECRET: ${AI_WEBHOOK_SHARED_SECRET}
-      SUPPORT_CATEGORIES: ${SUPPORT_CATEGORIES:-Bug,Crash,Gameplay,Technical,Installation,Account,Performance,Billing,Feedback,Other}
-      GAME_DATA_DIR: /app/game-data
+      SUPPORT_CATEGORIES: ${SUPPORT_CATEGORIES:-Bug,Crash,Technical,Installation,Account,Performance,Billing,Feature Request,Feedback,Other}
+      KNOWLEDGE_BASE_DIR: /app/knowledge-base
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "8000:8000"

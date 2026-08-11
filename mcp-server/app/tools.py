@@ -28,8 +28,8 @@ mcp = FastMCP(
         "Mutating tools (update_conversation_status, add_conversation_tag, "
         "set_conversation_attributes, create_internal_note, create_draft_response) change "
         "Chatwoot state and can be disabled deployment-wide via MCP_ENABLE_MUTATIONS. "
-        "create_draft_response never sends anything to a player -- it stores a private, "
-        "agent-only note. No tool here sends a message a player will see."
+        "create_draft_response never sends anything to a customer -- it stores a private, "
+        "agent-only note. No tool here sends a message a customer will see."
     ),
 )
 
@@ -76,7 +76,7 @@ async def search_conversations(query: str | None = None, status: str | None = No
 
 @mcp.tool()
 async def get_conversation_messages(conversation_id: int) -> dict:
-    """Fetch the full message history (player + agent + notes) for a conversation."""
+    """Fetch the full message history (customer + agent + notes) for a conversation."""
     try:
         return await get_client().get_conversation_messages(conversation_id)
     except ChatwootAPIError as exc:
@@ -85,7 +85,7 @@ async def get_conversation_messages(conversation_id: int) -> dict:
 
 @mcp.tool()
 async def search_contacts(query: str) -> dict:
-    """Search Chatwoot contacts (players) by name, email, or identifier."""
+    """Search Chatwoot contacts (customers) by name, email, or identifier."""
     try:
         return await get_client().search_contacts(query)
     except ChatwootAPIError as exc:
@@ -232,9 +232,9 @@ async def create_internal_note(conversation_id: int, content: str) -> dict:
 
 @mcp.tool()
 async def create_draft_response(conversation_id: int, content: str) -> dict:
-    """Store a suggested player-facing reply as a private note tagged "ai-draft".
+    """Store a suggested customer-facing reply as a private note tagged "ai-draft".
 
-    This never sends anything to the player. The draft is only visible to
+    This never sends anything to the customer. The draft is only visible to
     agents inside Chatwoot's conversation panel until a human copies it into
     a real reply.
     """

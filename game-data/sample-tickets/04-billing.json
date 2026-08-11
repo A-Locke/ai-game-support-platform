@@ -1,8 +1,0 @@
-{
-  "scenario": "billing",
-  "contact": {
-    "name": "Sam Okafor",
-    "email": "sam.okafor@example.test"
-  },
-  "message": "I was charged twice for the Deluxe Edition upgrade on the same day. Can you check my account and refund the duplicate charge?"
-}

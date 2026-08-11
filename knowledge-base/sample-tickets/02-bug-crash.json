@@ -1,0 +1,8 @@
+{
+  "scenario": "bug",
+  "contact": {
+    "name": "Jordan Ashworth",
+    "email": "jordan.ashworth@example.test"
+  },
+  "message": "The app crashes every time I try to export our Q2 report to CSV — it has around 15,000 rows. Happens consistently, right after I click Export. Using Chrome on Windows 11, release 1.4.0."
+}

@@ -1,0 +1,8 @@
+{
+  "scenario": "feedback",
+  "contact": {
+    "name": "Riley Bennett",
+    "email": "riley.bennett@example.test"
+  },
+  "message": "Really enjoying the new dashboard redesign! One small suggestion: it'd be nice if the app remembered my last selected date range between sessions."
+}

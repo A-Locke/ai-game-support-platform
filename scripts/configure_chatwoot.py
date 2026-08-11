@@ -30,7 +30,7 @@ CATEGORIES = [
     c.strip()
     for c in os.environ.get(
         "SUPPORT_CATEGORIES",
-        "Bug,Crash,Gameplay,Technical,Installation,Account,Performance,Billing,Feedback,Other",
+        "Bug,Crash,Technical,Installation,Account,Performance,Billing,Feature Request,Feedback,Other",
     ).split(",")
     if c.strip()
 ]

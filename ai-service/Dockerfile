@@ -1,13 +1,13 @@
 # Build context is the repo root (see docker-compose.yml's build.context for this service) --
-# this is the one service that needs a file outside its own directory: the game-data
-# knowledge base excerpt used to ground Claude's classification prompt.
+# this is the one service that needs a file outside its own directory: the knowledge-base
+# excerpt used to ground Claude's classification prompt.
 FROM python:3.12-slim
 
 WORKDIR /app
 
 COPY ai-service/pyproject.toml ./
 COPY ai-service/app ./app
-COPY game-data ./game-data
+COPY knowledge-base ./knowledge-base
 
 RUN pip install --no-cache-dir .
 

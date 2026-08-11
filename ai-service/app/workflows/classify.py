@@ -32,7 +32,7 @@ async def _extract_player_messages(conversation_id: int) -> list[str]:
 
 
 async def process_incoming_message(conversation_id: int, message_id: int) -> dict:
-    """Entry point called by the webhook handler for every actionable player message."""
+    """Entry point called by the webhook handler for every actionable customer message."""
     try:
         conversation = await mcp_client.call_tool("get_conversation", conversation_id=conversation_id)
     except MCPToolError as exc:

@@ -25,13 +25,13 @@ month), not a sized production estimate.
 
 | Driver | Estimate |
 |---|---|
-| Classification call per new conversation (~1–2K input tokens incl. game-data context, ~300 output tokens) | Low cents per 100 conversations at current Claude pricing tiers — see [claude.com/pricing](https://claude.com/pricing) for current per-model rates. |
+| Classification call per new conversation (~1–2K input tokens incl. knowledge-base context, ~300 output tokens) | Low cents per 100 conversations at current Claude pricing tiers — see [claude.com/pricing](https://claude.com/pricing) for current per-model rates. |
 | Reporting summarisation call | Occasional, on-demand only (triggered by a report request, not per-conversation) — negligible at demo volume. |
 | **Realistic demo-month estimate** | **< $5/mo** for a few hundred classified conversations plus occasional reports. |
 
 Exact cost depends on which Claude model is configured (`ANTHROPIC_MODEL` in `.env`) and average
 conversation length; the classification prompt is deliberately kept short (conversation
-messages + a short game-data excerpt, not the whole knowledge base) to keep this line item small
+messages + a short knowledge-base excerpt, not the whole knowledge base) to keep this line item small
 regardless of model choice.
 
 ## Support platform cost

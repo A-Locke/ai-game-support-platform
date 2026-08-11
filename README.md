@@ -1,12 +1,12 @@
-# AI-Augmented Game Support Platform
+# AI-Augmented Customer Support Platform
 
-A portfolio-quality demonstration of a self-hosted game-player support platform: **Chatwoot
-Community Edition** as the support system of record, plus a separate **AI orchestration**
-layer that calls **Claude** and reaches Chatwoot only through a self-hosted **MCP server**.
-Humans stay in control of every player-facing response. The demo dataset is a deliberately
-generic, fictional game (called, on the nose, **Generic**) — see
-[game-data/](game-data/) — chosen specifically so nothing here is tied to a real title or
-studio and the whole dataset is trivial to swap for a real game's content later.
+A portfolio-quality demonstration of a self-hosted customer support platform for any product or
+company: **Chatwoot Community Edition** as the support system of record, plus a separate **AI
+orchestration** layer that calls **Claude** and reaches Chatwoot only through a self-hosted
+**MCP server**. Humans stay in control of every customer-facing response. The demo dataset is a
+deliberately generic, fictional SaaS product (company: **ExampleCo**) — see
+[knowledge-base/](knowledge-base/) — chosen specifically so nothing here is tied to a real
+product or company, and the whole dataset is trivial to swap for real content later.
 
 See [docs/architecture.md](docs/architecture.md) for the full architecture,
 [docs/ai-workflows.md](docs/ai-workflows.md) for the AI workflows,
@@ -19,15 +19,15 @@ the running build log is in [PROJECT_JOURNAL.md](PROJECT_JOURNAL.md).
 
 ## Problem
 
-Small game studios receive a steady stream of repetitive player support requests — crash
-reports, "how do I," known-issue duplicates, the occasional spam ticket — but can't justify
-expensive enterprise support/AI infrastructure to triage them.
+Small support teams receive a steady stream of repetitive customer requests — crash reports,
+"how do I," known-issue duplicates, the occasional spam ticket — but can't justify expensive
+enterprise support/AI infrastructure to triage them.
 
 ## Solution
 
 A self-hosted support platform (Chatwoot) with a separate, independently deployable AI/MCP
 layer that augments human agents: it classifies incoming tickets, flags spam, drafts responses
-for review, and summarizes support trends — without ever sending anything to a player
+for review, and summarizes support trends — without ever sending anything to a customer
 automatically, and without Chatwoot or the MCP server knowing anything about the specific LLM
 behind the classification.
 
@@ -35,7 +35,7 @@ behind the classification.
 
 ```mermaid
 flowchart LR
-    Player -->|message| Chatwoot["Chatwoot\n(support platform,\nsource of truth)"]
+    Customer -->|message| Chatwoot["Chatwoot\n(support platform,\nsource of truth)"]
     Chatwoot -->|webhook| AI["ai-service\n(orchestration)"]
     AI -->|MCP| MCPServer["mcp-server"]
     MCPServer -->|Application API| Chatwoot
@@ -52,7 +52,7 @@ Full detail in [docs/architecture.md](docs/architecture.md).
 | Workflow | What it does |
 |---|---|
 | **Spam detection** | Classifies incoming conversations; spam is tagged and moved out of the active queue — never deleted. |
-| **Categorisation** | Classifies into a configurable category set (Bug, Crash, Gameplay, Technical, Installation, Account, Performance, Billing, Feedback, Other, Spam) via tags + custom attributes. |
+| **Categorisation** | Classifies into a configurable category set (Bug, Crash, Technical, Installation, Account, Performance, Billing, Feature Request, Feedback, Other, Spam) via tags + custom attributes. |
 | **Reporting** | Answers questions like "what are the main support issues this week?" — raw Chatwoot data retrieval and Claude summarisation are kept as separate steps. |
 | **Human escalation + draft** | Flags conversations needing a human, with a reasoning note; optionally drafts a suggested reply as a private, agent-only note — never auto-sent. |
 
@@ -92,10 +92,10 @@ Chatwoot Community Edition itself is free. Full breakdown in
 ## Demo scenarios
 
 1. **Spam** — a spam ticket is classified and tagged, never entering the normal queue.
-2. **Bug** — *"The game crashes every time I enter the Cathedral after obtaining the third
-   relic"* is classified as Bug/Crash, matched against a known issue, escalated to a human, and
-   given an AI-drafted response an agent reviews before sending.
-3. **Reporting** — *"What are the main support issues reported by players this week?"* returns
+2. **Bug** — *"The app crashes every time I export a report over 10,000 rows"* is classified as
+   Bug/Crash, matched against a known issue, escalated to a human, and given an AI-drafted
+   response an agent reviews before sending.
+3. **Reporting** — *"What are the main support issues reported by customers this week?"* returns
    aggregated Chatwoot data plus an AI-generated summary.
 
 Run `python scripts/run_demo.py` after setup to seed all three. See
@@ -115,9 +115,9 @@ webhook, and load the demo.
 ## Repository layout
 
 ```
-ai-service/       AI orchestration (FastAPI): webhook receiver, Claude client, workflows
+ai-service/        AI orchestration (FastAPI): webhook receiver, Claude client, workflows
 mcp-server/        Self-hosted MCP server: Chatwoot tool abstraction
-game-data/         "Generic" (fictional game) FAQ, known issues, patch notes, sample tickets
+knowledge-base/    "ExampleCo" (fictional product) FAQ, known issues, release notes, sample tickets
 deployment/        Cloud Compose overlay (Caddy) and deployment notes
 scripts/           Chatwoot configuration, demo seeding
 docs/              Architecture, AI workflows, MCP reference, setup, cost, ADRs
@@ -125,8 +125,9 @@ docs/              Architecture, AI workflows, MCP reference, setup, cost, ADRs
 
 ## Future extensions
 
-Steam player context · automatic duplicate bug detection · Jira/GitHub integration · a QA
-MCP integration (player report → known issue → regression test → bug tracker; see
+Third-party account context (CRM, billing provider) · automatic duplicate bug detection ·
+Jira/Azure DevOps integration · a QA MCP integration (customer report → known issue →
+regression test → bug tracker; see
 [docs/architecture.md](docs/architecture.md#future-integration-direction-not-implemented)) ·
 automatic reproduction-test generation · knowledge-base maintenance · multilingual support ·
 confidence-based automation · human feedback loops.

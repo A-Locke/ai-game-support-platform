@@ -8,7 +8,7 @@
 
 ## Context
 
-This project is a portfolio-quality demonstration of an AI-augmented game support platform: **Chatwoot Community Edition** as the support system of record, a separate **AI orchestration** service that watches Chatwoot via webhooks and calls **Claude**, and a self-hosted **MCP server** that is the only path either the AI layer or any future client has into Chatwoot. The originating brief (`ai_augmented_game_support_technical_task.md`, ingested into these docs and removed once that ingestion was complete — see the project journal) specifies the separation principle, the four AI workflows, and the scope constraints; this ADR records the *implementation-level* decisions the brief left to the implementer, and why each was made.
+This project is a portfolio-quality demonstration of an AI-augmented customer support platform, applicable to any product/company, not a single vertical: **Chatwoot Community Edition** as the support system of record, a separate **AI orchestration** service that watches Chatwoot via webhooks and calls **Claude**, and a self-hosted **MCP server** that is the only path either the AI layer or any future client has into Chatwoot. The originating brief (`ai_augmented_game_support_technical_task.md`, ingested into these docs and removed once that ingestion was complete — see the project journal) was scoped around a game-support example, and specifies the separation principle, the four AI workflows, and the scope constraints; the project was later generalized past that single-vertical framing (see the project journal) since nothing about the architecture is actually game-specific. This ADR records the *implementation-level* decisions the brief left to the implementer, and why each was made.
 
 ## Decision Drivers
 
@@ -40,11 +40,11 @@ This project is a portfolio-quality demonstration of an AI-augmented game suppor
 
 **Why:** `UseResponse`'s MCP server implements a full OAuth 2.0 dance because it's designed to be added as a *remote connector inside claude.ai itself*, which requires OAuth. This server has exactly one intended client — the ai-service — which can be trusted with a long-lived static secret the same way it's trusted with the Chatwoot API token and the Anthropic API key. Building OAuth for a single known caller would be protocol-shaped busywork with no real security benefit here.
 
-### D4: Draft player-facing responses are stored as private Chatwoot notes, not a bespoke entity
+### D4: Draft customer-facing responses are stored as private Chatwoot notes, not a bespoke entity
 
 **Decision:** `create_draft_response` writes a private (agent-only) message prefixed `[AI DRAFT]` and tags the conversation `ai-draft`. There is no separate "drafts" table or API.
 
-**Why:** Chatwoot's private notes are already invisible to the player and visible to agents inside the normal conversation panel — exactly the behavior brief §3.D and §10 require ("store the draft without automatically sending it; make the draft available to the support agent"). Inventing new storage for this would duplicate infrastructure Chatwoot already provides and would need its own agent-facing UI, which is out of scope (§18 rules out a custom frontend).
+**Why:** Chatwoot's private notes are already invisible to the customer and visible to agents inside the normal conversation panel — exactly the behavior brief §3.D and §10 require ("store the draft without automatically sending it; make the draft available to the support agent"). Inventing new storage for this would duplicate infrastructure Chatwoot already provides and would need its own agent-facing UI, which is out of scope (§18 rules out a custom frontend).
 
 ### D5: Idempotency via a Chatwoot custom attribute, not a local database
 
@@ -72,7 +72,7 @@ This project is a portfolio-quality demonstration of an AI-augmented game suppor
 
 **Decision:** The MCP server has no hardcoded category list. `get_category_statistics(since, until, categories)` treats each category as an opaque Chatwoot label; ai-service owns `SUPPORT_CATEGORIES` (brief §3.B: "the category list should be configuration-driven") and passes it in per call.
 
-**Why:** Baking the category list into the MCP server would put support-workflow business logic into a layer brief §2 says must stay Claude/business-logic-agnostic ("do not put Claude-specific code into the MCP server" — read broadly, this extends to game-support-specific business logic like a fixed category taxonomy, not literally just Claude API calls).
+**Why:** Baking the category list into the MCP server would put support-workflow business logic into a layer brief §2 says must stay Claude/business-logic-agnostic ("do not put Claude-specific code into the MCP server" — read broadly, this extends to support-workflow-specific business logic like a fixed category taxonomy, not literally just Claude API calls).
 
 ### D9: Reporting is two Claude-free MCP calls, then one separate summarization call
 

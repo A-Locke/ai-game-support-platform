@@ -37,7 +37,7 @@ class ChatwootWebhookEvent(BaseModel):
 
     @property
     def is_actionable_player_message(self) -> bool:
-        """True only for a real, non-private message sent by the player. Excludes agent
+        """True only for a real, non-private message sent by the customer. Excludes agent
         replies and the AI's own private notes/drafts -- see docs/ai-workflows.md#trigger."""
         return self.event == "message_created" and self.message_type == "incoming" and not self.private
 

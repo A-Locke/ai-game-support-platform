@@ -90,7 +90,7 @@ category), and creates the custom attributes `ai_category`, `ai_confidence`, and
 python scripts/run_demo.py
 ```
 
-Creates the three demo conversations from `game-data/sample-tickets/` against your local
+Creates the three demo conversations from `knowledge-base/sample-tickets/` against your local
 Chatwoot instance and prints the resulting classification, tags, and any draft response once
 `ai-service` has processed them (a few seconds). See the demo scenarios in the [top-level
 README](../README.md#demo-scenarios).

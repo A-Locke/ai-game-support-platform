@@ -34,14 +34,14 @@ async def test_valid_classification_returns_parsed_result():
                     "spam": False,
                     "requires_human": True,
                     "confidence": 0.94,
-                    "reason": "Repeatable crash entering the Cathedral after the third relic.",
+                    "reason": "Repeatable crash exporting reports over 10,000 rows.",
                     "draft_response": "Thanks for the report!",
                 }
             ),
         )
     )
 
-    result = await classify_conversation(["The game crashes every time I enter the Cathedral"])
+    result = await classify_conversation(["The app crashes every time I export a large report"])
 
     assert result.category == "Crash"
     assert result.requires_human is True

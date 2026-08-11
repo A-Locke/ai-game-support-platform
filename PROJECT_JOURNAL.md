@@ -219,3 +219,54 @@ together. Reading the actual Rails/Sidekiq logs, and in two cases the Chatwoot i
 source, settled root causes that would otherwise have been guesswork.
 
 ---
+
+## Milestone 3 — Universalized past the game-support framing
+
+**Status:** complete
+**Date started:** 2026-08-11
+**Date completed:** 2026-08-11
+
+### Decision
+
+The project owner asked to remove all gaming-specific framing: the originating brief was scoped
+around a game-support example, and Milestone 0 had already renamed the demo game once ("Ashfall"
+→ "Generic") to dodge a real-studio collision, but the whole premise -- game studios, players,
+crashes-in-a-dungeon -- was still gaming-flavored throughout. Nothing about the actual
+architecture is gaming-specific (Chatwoot, the MCP tool surface, and the classification
+workflow don't know or care what kind of product they're supporting), so this was a pure
+terminology/content pass, not a redesign.
+
+### What changed
+
+- `game-data/` → `knowledge-base/` (also renamed `patch-notes/` → `release-notes/`), and
+  `GAME_DATA_DIR`/`game_data_dir` → `KNOWLEDGE_BASE_DIR`/`knowledge_base_dir` throughout
+  `ai-service`, `docker-compose.yml`, and both Dockerfiles.
+- The fictional demo dataset changed from a fictional game ("Generic") to a fictional SaaS
+  company ("ExampleCo"): the known-issue/draft-response demo scenario changed from "crash
+  entering the Cathedral after the third relic" to "crash exporting a report over 10,000 rows,"
+  and the sample tickets, FAQ, and release notes were rewritten to match.
+- "player" → "customer" throughout code, docs, and prompts (including the classification
+  prompt's system framing, "you are triaging a support conversation for a video game" →
+  "... for a software product").
+- Default `SUPPORT_CATEGORIES` dropped `Gameplay` and added `Feature Request`, a category that
+  makes sense for any product, not just games.
+- This entry is the only place that narrative change is recorded -- Milestones 0-2 above are
+  left exactly as originally written, since they're an accurate record of what was actually true
+  and actually tested at the time (including real references to "Ashfall," "Generic," and the
+  Cathedral bug). Rewriting history to match current framing would make the journal less useful,
+  not more.
+- The GitHub repo's description was updated to match; the repo name/URL
+  (`ai-game-support-platform`) was intentionally left alone rather than renamed unprompted, since
+  a rename breaks any existing clones/links and the project owner didn't ask for that
+  specifically -- flagged to them as a follow-up choice.
+
+### Verification
+
+Both test suites re-run clean after the rename (`mcp-server` 20, `ai-service` 21, unchanged
+counts -- this was a content pass, not a logic change), and both images were rebuilt and
+redeployed against the already-running local stack to confirm the renamed
+`knowledge-base/` directory actually lands correctly inside the `ai-service` container
+(`docker exec ... ls /app/knowledge-base` showed all four subdirectories) and both services
+still report healthy.
+
+---

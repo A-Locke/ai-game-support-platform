@@ -1,4 +1,4 @@
-"""Human escalation + draft response (brief §3.D). Never sends anything to the player --
+"""Human escalation + draft response (brief §3.D). Never sends anything to the customer --
 both the reasoning note and the draft are private, agent-only Chatwoot messages."""
 
 from app import mcp_client

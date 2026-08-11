@@ -1,0 +1,8 @@
+{
+  "scenario": "spam",
+  "contact": {
+    "name": "PromoBot99",
+    "email": "promo-bot-99@example-spam.test"
+  },
+  "message": "GET A FREE $500 GIFT CARD NOW!!! Click here: http://totally-legit-prize-claim.example — limited time only, no survey, works for ALL accounts!!!"
+}

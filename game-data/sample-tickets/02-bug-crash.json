@@ -1,8 +1,0 @@
-{
-  "scenario": "bug",
-  "contact": {
-    "name": "Jordan Ashworth",
-    "email": "jordan.ashworth@example.test"
-  },
-  "message": "The game crashes every time I enter the Cathedral after obtaining the third relic. Happened three times in a row now, always right after the loading screen finishes. Playing on PC, patch 1.4.0."
-}

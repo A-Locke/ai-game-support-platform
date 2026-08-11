@@ -29,7 +29,7 @@ _FALLBACK = ClassificationResult(
 def _classification_tool_schema(categories: list[str]) -> dict:
     return {
         "name": _CLASSIFY_TOOL_NAME,
-        "description": "Record the classification of a player support conversation.",
+        "description": "Record the classification of a customer support conversation.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -44,7 +44,7 @@ def _classification_tool_schema(categories: list[str]) -> dict:
                 "draft_response": {
                     "type": ["string", "null"],
                     "description": (
-                        "A suggested player-facing reply, only if requires_human is true and a "
+                        "A suggested customer-facing reply, only if requires_human is true and a "
                         "reasonable reply can be drafted from the known-issue/FAQ context "
                         "provided. Null otherwise. Never sent automatically -- always reviewed "
                         "by a human first."
@@ -59,9 +59,9 @@ def _classification_tool_schema(categories: list[str]) -> dict:
 def _build_prompt(conversation_messages: list[str]) -> str:
     transcript = "\n".join(conversation_messages) if conversation_messages else "(no messages)"
     return (
-        "You are triaging a support conversation for a video game.\n\n"
+        "You are triaging a customer support conversation for a software product.\n\n"
         f"Known issues / FAQ context:\n{load_knowledge_excerpt()}\n\n"
-        f"Conversation transcript (player messages):\n{transcript}\n\n"
+        f"Conversation transcript (customer messages):\n{transcript}\n\n"
         "Classify this conversation by calling record_classification."
     )
 
@@ -124,7 +124,7 @@ async def summarize_report(report_data: dict) -> str:
                 {
                     "role": "user",
                     "content": (
-                        "Summarize this game support report data for a studio's support lead, "
+                        "Summarize this customer support report data for a support lead, "
                         "in a short paragraph plus up to 3 bullet points of notable trends. "
                         f"Data:\n{report_data}"
                     ),

@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Runtime configuration for ai-service.
 
-    This is the one component that knows both Claude and the game-support business logic
+    This is the one component that knows both Claude and the support business logic
     (categories, escalation, spam). It reaches Chatwoot exclusively through mcp_server_url --
     see docs/architecture.md.
     """
@@ -20,10 +20,10 @@ class Settings(BaseSettings):
     ai_webhook_shared_secret: str = ""
 
     support_categories: str = (
-        "Bug,Crash,Gameplay,Technical,Installation,Account,Performance,Billing,Feedback,Other"
+        "Bug,Crash,Technical,Installation,Account,Performance,Billing,Feature Request,Feedback,Other"
     )
 
-    game_data_dir: str = "game-data"
+    knowledge_base_dir: str = "knowledge-base"
 
     log_level: str = "INFO"
 

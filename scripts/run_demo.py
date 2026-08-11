@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seeds the three demo scenarios from game-data/sample-tickets/ against a running local
+"""Seeds the three demo scenarios from knowledge-base/sample-tickets/ against a running local
 Chatwoot + ai-service, then polls each conversation until ai-service has processed it and
 prints the result. Finishes with the reporting scenario. See docs/setup.md step 5 and the
 top-level README's "Demo scenarios" section.
@@ -23,7 +23,7 @@ AI_SERVICE_URL = os.environ.get("AI_SERVICE_PUBLIC_URL", "http://localhost:8000"
 ACCOUNT_ID = os.environ.get("CHATWOOT_ACCOUNT_ID", "1")
 API_TOKEN = os.environ.get("CHATWOOT_API_ACCESS_TOKEN", "")
 
-TICKETS_DIR = Path(__file__).resolve().parent.parent / "game-data" / "sample-tickets"
+TICKETS_DIR = Path(__file__).resolve().parent.parent / "knowledge-base" / "sample-tickets"
 POLL_TIMEOUT_SECONDS = 30
 POLL_INTERVAL_SECONDS = 2
 
@@ -52,7 +52,7 @@ def _first_inbox_identifier(client: httpx.Client) -> str:
 
 
 def _create_conversation(client: httpx.Client, inbox_identifier: str, ticket: dict) -> int:
-    """Seed a conversation as a genuine player message, not an agent-authored one.
+    """Seed a conversation as a genuine customer message, not an agent-authored one.
 
     Chatwoot's Application API conversation-create shortcut (POST .../conversations with a
     `message` object, authenticated as an agent) creates that seed message as *outgoing*
@@ -100,7 +100,7 @@ def run_scenarios(client: httpx.Client) -> None:
     for ticket_path in sorted(TICKETS_DIR.glob("*.json")):
         ticket = json.loads(ticket_path.read_text(encoding="utf-8"))
         print(f"\n=== Scenario: {ticket['scenario']} ===")
-        print(f"Player message: {ticket['message'][:100]}...")
+        print(f"Customer message: {ticket['message'][:100]}...")
 
         conversation_id = _create_conversation(client, inbox_identifier, ticket)
         print(f"Created conversation {conversation_id}, waiting for ai-service...")
@@ -118,7 +118,7 @@ def run_scenarios(client: httpx.Client) -> None:
 
 def run_reporting_scenario() -> None:
     print("\n=== Scenario: reporting ===")
-    print('Question: "What are the main support issues reported by players this week?"')
+    print('Question: "What are the main support issues reported by customers this week?"')
     response = httpx.get(f"{AI_SERVICE_URL}/reports/summary", timeout=30.0)
     response.raise_for_status()
     body = response.json()

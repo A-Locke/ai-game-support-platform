@@ -29,8 +29,8 @@ Nothing in this server knows what an LLM is. It has no Claude SDK dependency and
 |---|---|
 | `get_conversation(conversation_id)` | Fetch a single conversation, including status and custom attributes. |
 | `search_conversations(query?, status?, page?)` | Search or list conversations. |
-| `get_conversation_messages(conversation_id)` | Full message history (player + agent + notes). |
-| `search_contacts(query)` | Search players/contacts. |
+| `get_conversation_messages(conversation_id)` | Full message history (customer + agent + notes). |
+| `search_contacts(query)` | Search customers/contacts. |
 | `get_support_statistics(since, until)` | Ticket volume, spam count, human-intervention count for a date range. Data retrieval only — no LLM involvement. |
 | `get_category_statistics(since, until, categories)` | Per-category conversation counts. `categories` is supplied by the caller. |
 
@@ -42,7 +42,7 @@ Nothing in this server knows what an LLM is. It has no Claude SDK dependency and
 | `add_conversation_tag(conversation_id, tags)` | Attach labels (e.g. a category, or `spam`). |
 | `set_conversation_attributes(conversation_id, attributes)` | Set custom attributes (e.g. `ai_category`, `ai_last_processed_message_id`). |
 | `create_internal_note(conversation_id, content)` | Add a private, agent-only note. |
-| `create_draft_response(conversation_id, content)` | Store a suggested reply as a private note tagged `ai-draft` — never sent to the player. |
+| `create_draft_response(conversation_id, content)` | Store a suggested reply as a private note tagged `ai-draft` — never sent to the customer. |
 
 Setting `MCP_ENABLE_MUTATIONS=false` disables the mutating group entirely (each call returns a
 structured `{"error": true, ...}` result instead of touching Chatwoot), while every read-only

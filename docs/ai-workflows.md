@@ -11,7 +11,7 @@ directly. See [architecture.md](architecture.md) for how a webhook reaches these
 `conversation_created`. Every classify-worthy conversation already has a first message, so
 `conversation_created` would be redundant; more importantly, `create_internal_note` and
 `create_draft_response` (§D below) *also* fire `message_created`, since a private note is still
-a message. The webhook handler filters to `message_type == "incoming"` (sent by the player, not
+a message. The webhook handler filters to `message_type == "incoming"` (sent by the customer, not
 an agent or the AI itself) and `private == false` — without that filter, the AI's own notes
 would trigger another classification pass on themselves. See
 [`docker-compose.yml`/`scripts/configure_chatwoot.py`](../scripts/configure_chatwoot.py) for
@@ -26,8 +26,8 @@ maps to one round-trip instead of three. `ai-service/app/claude_client.py` imple
 forced tool call (`tool_choice` pinned to a `record_classification` tool), so the model's output
 is schema-constrained rather than free-text JSON the code has to hope is well-formed — see
 [ADR 0001, D7](adr/0001-architecture-and-tech-stack.md#d7-structured-claude-output-via-forced-tool-use-not-prompt-embedded-json).
-The prompt includes the conversation's messages plus a short excerpt of the game-data knowledge
-base (known issues / FAQ) so the model can ground `reason` and `draft_response` in real product
+The prompt includes the conversation's messages plus a short excerpt of the knowledge base
+(known issues / FAQ) so the model can ground `reason` and `draft_response` in real product
 context instead of guessing.
 
 ```json
@@ -36,7 +36,7 @@ context instead of guessing.
   "spam": false,
   "requires_human": true,
   "confidence": 0.94,
-  "reason": "Player reports a repeatable crash entering the Cathedral after obtaining the third relic — matches known issue KI-014.",
+  "reason": "Customer reports a repeatable crash exporting a report over 10,000 rows — matches known issue KI-014.",
   "draft_response": "Hi! Thanks for the report — this is a known issue (KI-014) our team is actively working on. ..."
 }
 ```
@@ -52,7 +52,7 @@ flowchart LR
 
 `workflows/spam.py` reads the `spam` field off the shared classification result. Spam is
 **never deleted** — it's tagged and moved out of the default open queue (`pending` status), per
-brief §3.A ("should not automatically delete player messages"). A human can always find and
+brief §3.A ("should not automatically delete customer messages"). A human can always find and
 correct a false positive.
 
 ## B. Automatic categorisation
@@ -60,7 +60,7 @@ correct a false positive.
 `workflows/categorize.py` reads the `category` field and writes it as both a Chatwoot label
 (for filtering/search in the Chatwoot UI) and a custom attribute `ai_category` (for structured
 querying by the reporting workflow). The category list itself lives in ai-service configuration
-(`SUPPORT_CATEGORIES`, a comma-separated env var — default: `Bug, Crash, Gameplay, Technical,
+(`SUPPORT_CATEGORIES`, a comma-separated env var — default: `Bug, Crash, Technical,
 Installation, Account, Performance, Billing, Feedback, Other, Spam`), never hardcoded in the MCP
 server or the prompt-building code, so adding a category is a config change, not a code change.
 
@@ -91,12 +91,12 @@ flowchart LR
     B -->|no| F[No escalation —<br/>conversation stays in normal queue]
 ```
 
-`workflows/escalate.py` never sends anything to the player. `requires_human=true` adds the
+`workflows/escalate.py` never sends anything to the customer. `requires_human=true` adds the
 `human-escalated` label and a private note explaining *why* (the model's `reason` field) so an
 agent doesn't have to re-derive the classification. If the model also produced a
 `draft_response`, it's stored via `create_draft_response` — a private note an agent can copy
 into a real reply, edit, or discard. This is the brief's hard constraint (§3.D, §10): **the AI
-must not automatically send player-facing responses in this version.**
+must not automatically send customer-facing responses in this version.**
 
 ## Idempotency
 

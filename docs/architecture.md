@@ -50,7 +50,7 @@ into Chatwoot or the MCP server. Concretely:
   mean as concepts — it exposes generic Chatwoot operations (get/search conversations, tag,
   set attributes, add a private note) and nothing more. See [mcp-server.md](mcp-server.md) for
   the full tool list.
-- **ai-service** is the only component that knows about Claude *and* about game-support
+- **ai-service** is the only component that knows about Claude *and* about support
   business logic (what a category is, when to escalate, what "spam" means for this product). It
   reaches Chatwoot exclusively through MCP tool calls — never a direct Chatwoot API call — so
   swapping the MCP server implementation, or pointing it at a different support platform
@@ -64,13 +64,13 @@ the others.
 
 ```mermaid
 sequenceDiagram
-    participant Player
+    participant Customer
     participant Chatwoot
     participant ai-service
     participant mcp-server
     participant Claude
 
-    Player->>Chatwoot: sends a message
+    Customer->>Chatwoot: sends a message
     Chatwoot->>ai-service: webhook (conversation_created / message_created)
     ai-service->>mcp-server: get_conversation, get_conversation_messages
     mcp-server->>Chatwoot: Application API
@@ -85,7 +85,7 @@ sequenceDiagram
     Note over Chatwoot: Human agent reviews tags,<br/>reasoning note, and draft (if any)<br/>inside Chatwoot itself
 ```
 
-No player-facing message is ever sent automatically — the only mutations in this flow are tags,
+No customer-facing message is ever sent automatically — the only mutations in this flow are tags,
 custom attributes, and *private* notes, all of which are agent-only until a human acts.
 
 ## Components
@@ -114,7 +114,7 @@ session state.
 
 ## Future integration direction (not implemented)
 
-The brief's future-scope QA integration (player report → known issue → QA MCP → regression test
+The brief's future-scope QA integration (customer report → known issue → QA MCP → regression test
 → bug tracker) is intentionally not built here. The point of keeping Chatwoot, the AI layer, and
 the MCP server separate — rather than, say, having ai-service call Chatwoot directly — is that a
 future QA MCP server could sit alongside this support MCP server as a peer, with ai-service (or

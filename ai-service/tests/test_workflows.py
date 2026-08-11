@@ -26,7 +26,7 @@ class FakeMCP:
         return [args for called, args in self.calls if called == name]
 
 
-def _player_messages_payload(*texts: str) -> dict:
+def _customer_messages_payload(*texts: str) -> dict:
     # message_type: 0 matches Chatwoot's real Application API response shape (a raw integer
     # enum), not the string "incoming" used in webhook payloads -- this fixture originally used
     # the string, which meant the classify_conversation filter's string-vs-int bug (fixed in
@@ -65,7 +65,7 @@ async def test_player_message_extraction_matches_real_chatwoot_message_type_shap
         {
             "get_conversation_messages": {
                 "payload": [
-                    {"message_type": 0, "private": False, "content": "player message"},
+                    {"message_type": 0, "private": False, "content": "customer message"},
                     {"message_type": 1, "private": False, "content": "agent reply, must be excluded"},
                     {"message_type": 0, "private": True, "content": "private note, must be excluded"},
                 ]
@@ -84,11 +84,11 @@ async def test_player_message_extraction_matches_real_chatwoot_message_type_shap
 
     await classify_module.process_incoming_message(conversation_id=9, message_id=900)
 
-    assert captured["messages"] == ["player message"]
+    assert captured["messages"] == ["customer message"]
 
 
 async def test_spam_conversation_is_tagged_and_moved_to_pending(monkeypatch, spam_result):
-    fake = FakeMCP({"get_conversation_messages": _player_messages_payload("buy cheap gold now!!!")})
+    fake = FakeMCP({"get_conversation_messages": _customer_messages_payload("buy cheap gift cards now!!!")})
     monkeypatch.setattr(mcp_client, "call_tool", fake.call_tool)
     monkeypatch.setattr(classify_module, "classify_conversation", lambda messages: _async_return(spam_result))
 
@@ -104,7 +104,7 @@ async def test_spam_conversation_is_tagged_and_moved_to_pending(monkeypatch, spa
 
 
 async def test_bug_conversation_is_categorized(monkeypatch, bug_result):
-    fake = FakeMCP({"get_conversation_messages": _player_messages_payload("small texture glitch on the map")})
+    fake = FakeMCP({"get_conversation_messages": _customer_messages_payload("small UI glitch on the dashboard")})
     monkeypatch.setattr(mcp_client, "call_tool", fake.call_tool)
     monkeypatch.setattr(classify_module, "classify_conversation", lambda messages: _async_return(bug_result))
 
@@ -118,7 +118,7 @@ async def test_bug_conversation_is_categorized(monkeypatch, bug_result):
 
 
 async def test_escalation_creates_note_and_draft_never_auto_sent(monkeypatch, escalation_result):
-    fake = FakeMCP({"get_conversation_messages": _player_messages_payload("crashes every time in the Cathedral")})
+    fake = FakeMCP({"get_conversation_messages": _customer_messages_payload("app crashes every time I export a large report")})
     monkeypatch.setattr(mcp_client, "call_tool", fake.call_tool)
     monkeypatch.setattr(classify_module, "classify_conversation", lambda messages: _async_return(escalation_result))
 
@@ -129,12 +129,12 @@ async def test_escalation_creates_note_and_draft_never_auto_sent(monkeypatch, es
     assert {"conversation_id": 3, "tags": ["human-escalated"]} in fake.calls_named("add_conversation_tag")
     draft_calls = fake.calls_named("create_draft_response")
     assert draft_calls and draft_calls[0]["content"] == escalation_result.draft_response
-    # No tool in this project's MCP surface sends a player-facing message -- draft storage
+    # No tool in this project's MCP surface sends a customer-facing message -- draft storage
     # is a private note (see mcp-server's create_draft_response), which is the whole point.
 
 
 async def test_idempotent_duplicate_event_is_skipped(monkeypatch, bug_result):
-    fake = FakeMCP({"get_conversation_messages": _player_messages_payload("hello")})
+    fake = FakeMCP({"get_conversation_messages": _customer_messages_payload("hello")})
     fake._conversation_attributes = {"ai_last_processed_message_id": "400"}
     monkeypatch.setattr(mcp_client, "call_tool", fake.call_tool)
     was_called = False
