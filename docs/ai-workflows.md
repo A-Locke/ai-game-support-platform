@@ -26,12 +26,15 @@ maps to one round-trip instead of three. `ai-service/app/claude_client.py` imple
 forced tool call (`tool_choice` pinned to a `record_classification` tool), so the model's output
 is schema-constrained rather than free-text JSON the code has to hope is well-formed — see
 [ADR 0001, D7](adr/0001-architecture-and-tech-stack.md#d7-structured-claude-output-via-forced-tool-use-not-prompt-embedded-json).
-The prompt includes the conversation's messages plus a short excerpt of the knowledge base
-(known issues / FAQ) so the model can ground `reason` and `draft_response` in real product
-context instead of guessing. When configured, it also includes real matches from Jira and/or
-Azure DevOps (`app/grounding.py`, searched using the first customer message as a short query) —
-see [ADR 0004](adr/0004-issue-tracker-grounding.md). Both are optional and independent; a tracker
-outage degrades to "no extra context," never a blocked classification.
+The prompt includes the conversation's messages plus knowledge-base context so the model can
+ground `reason` and `draft_response` in real product context instead of guessing. That context
+comes from real semantic search (`app/rag_client.py` → `rag-mcp`, pgvector + local embeddings —
+see [ADR 0006](adr/0006-knowledge-base-rag.md)) when configured, falling back to the original
+flat file dump (`app/knowledge.py`) otherwise. When configured, the prompt also includes real
+matches from Jira and/or Azure DevOps (`app/grounding.py`, searched using the first customer
+message as a short query) — see [ADR 0004](adr/0004-issue-tracker-grounding.md). All three
+context sources are optional and independent; any outage degrades to "no extra context from that
+source," never a blocked classification.
 
 ```json
 {

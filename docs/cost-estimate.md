@@ -31,8 +31,14 @@ month), not a sized production estimate.
 
 Exact cost depends on which Claude model is configured (`ANTHROPIC_MODEL` in `.env`) and average
 conversation length; the classification prompt is deliberately kept short (conversation
-messages + a short knowledge-base excerpt, not the whole knowledge base) to keep this line item small
-regardless of model choice.
+messages + the top-K semantically relevant knowledge-base documents, not the whole knowledge
+base) to keep this line item small regardless of model choice.
+
+## Knowledge-base search (RAG) cost
+
+**$0.** `rag-mcp` embeds locally via `fastembed` (ONNX Runtime, not a hosted API) — no per-query
+or per-document cost, no API key. See [ADR 0006](adr/0006-knowledge-base-rag.md) for why this
+was chosen over OpenAI/Voyage AI embeddings specifically to avoid adding a paid dependency here.
 
 ## Support platform cost
 

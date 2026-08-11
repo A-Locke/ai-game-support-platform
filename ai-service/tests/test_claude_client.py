@@ -1,6 +1,9 @@
+import json
+
 import respx
 from httpx import Response
 
+from app import rag_client
 from app.claude_client import classify_conversation, summarize_report
 from app.config import settings
 from tests.conftest import ANTHROPIC_MESSAGES_URL, text_response, tool_use_response
@@ -91,6 +94,45 @@ async def test_claude_api_failure_falls_back_after_retry():
     assert result.category == "Other"
     assert result.requires_human is True
     assert route.call_count == 2  # one retry, per claude_client's retry-once policy
+
+
+@respx.mock
+async def test_prompt_falls_back_to_flat_knowledge_dump_when_rag_not_configured():
+    # ADR 0006, D7: RAG_MCP_URL unset (the default in tests, see conftest.py) means the
+    # original flat knowledge-base dump is used, unchanged from before RAG existed.
+    settings.rag_mcp_url = ""
+    route = respx.post(ANTHROPIC_MESSAGES_URL).mock(
+        return_value=Response(200, json=tool_use_response({
+            "category": "Bug", "spam": False, "requires_human": False, "confidence": 0.5, "reason": "x",
+        }))
+    )
+
+    await classify_conversation(["some message"])
+
+    sent_prompt = json.loads(route.calls.last.request.content)["messages"][0]["content"]
+    assert "Known issues / FAQ context:" in sent_prompt
+
+
+@respx.mock
+async def test_prompt_uses_rag_results_when_configured(monkeypatch):
+    settings.rag_mcp_url = "http://rag-mcp.test/mcp"
+
+    async def _fake_search(query):
+        return "### KI-014 Large export crash (relevance 0.91)\nCrashes over 10k rows."
+
+    monkeypatch.setattr("app.claude_client.search_knowledge_base", _fake_search)
+
+    route = respx.post(ANTHROPIC_MESSAGES_URL).mock(
+        return_value=Response(200, json=tool_use_response({
+            "category": "Crash", "spam": False, "requires_human": True, "confidence": 0.9, "reason": "x",
+        }))
+    )
+
+    await classify_conversation(["The app crashes exporting a report"])
+
+    sent_prompt = json.loads(route.calls.last.request.content)["messages"][0]["content"]
+    assert "KI-014 Large export crash" in sent_prompt
+    assert "Crashes over 10k rows." in sent_prompt
 
 
 @respx.mock

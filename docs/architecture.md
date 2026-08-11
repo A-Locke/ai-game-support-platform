@@ -93,8 +93,9 @@ custom attributes, and *private* notes, all of which are agent-only until a huma
 | Component | Language/framework | Talks to | Deploys as |
 |---|---|---|---|
 | Chatwoot | Ruby on Rails (upstream, unmodified) | Postgres, Redis | Official Docker image |
-| ai-service | Python, FastAPI | Chatwoot (webhooks in), mcp-server (MCP out), Claude (Anthropic API) | Docker container; Cloud Run-compatible |
+| ai-service | Python, FastAPI | Chatwoot (webhooks in), mcp-server + rag-mcp (MCP out), Claude (Anthropic API), optionally Jira/Azure DevOps MCP servers | Docker container; Cloud Run-compatible |
 | mcp-server | Python, `fastmcp` | Chatwoot (Application API) | Docker container; Cloud Run-compatible (stateless Streamable HTTP) |
+| rag-mcp | Python, `fastmcp` | Postgres (pgvector, own schema) | Docker container; Cloud Run-compatible (stateless Streamable HTTP) — see [ADR 0006](adr/0006-knowledge-base-rag.md) |
 
 See [ADR 0001](adr/0001-architecture-and-tech-stack.md) for the reasoning behind each of these
 choices, including why the MCP server specifically avoids the SSE transport and any server-side

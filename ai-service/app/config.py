@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     azure_devops_mcp_pat: str = ""
     grounding_max_results: int = 3
 
+    # Optional semantic search over knowledge_base_dir (docs/adr/0006). Empty rag_mcp_url means
+    # ai-service falls back to knowledge.load_knowledge_excerpt()'s flat dump (ADR 0006, D7).
+    rag_mcp_url: str = ""
+    rag_mcp_auth_token: str = ""
+    rag_top_k: int = 3
+
     log_level: str = "INFO"
 
     @property

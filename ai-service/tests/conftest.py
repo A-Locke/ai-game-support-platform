@@ -15,6 +15,8 @@ def configured_settings():
     settings.jira_mcp_api_token = ""
     settings.azure_devops_mcp_url = ""
     settings.azure_devops_mcp_pat = ""
+    settings.rag_mcp_url = ""
+    settings.rag_mcp_auth_token = ""
     yield
 
 

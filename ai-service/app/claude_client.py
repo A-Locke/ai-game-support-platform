@@ -12,6 +12,7 @@ from app.config import settings
 from app.grounding import search_related_issues
 from app.knowledge import load_knowledge_excerpt
 from app.models import ClassificationResult
+from app.rag_client import search_knowledge_base
 
 logger = structlog.get_logger(__name__)
 
@@ -59,18 +60,23 @@ def _classification_tool_schema(categories: list[str]) -> dict:
 
 async def _build_prompt(conversation_messages: list[str]) -> str:
     transcript = "\n".join(conversation_messages) if conversation_messages else "(no messages)"
+    query = conversation_messages[0][:200] if conversation_messages else ""
 
-    # Real issue-tracker grounding (docs/adr/0004), optional and additive to the static
-    # knowledge-base excerpt below -- searched using the first customer message as a short,
-    # representative query rather than the full transcript.
-    grounding = ""
-    if conversation_messages:
-        grounding = await search_related_issues(conversation_messages[0][:200])
+    # Knowledge-base context: semantic search via rag-mcp when configured (ADR 0006), falling
+    # back to the flat file dump otherwise -- same query used for issue-tracker grounding below.
+    knowledge_context = await search_knowledge_base(query) if query else ""
+    if not knowledge_context:
+        knowledge_context = load_knowledge_excerpt()
+
+    # Real issue-tracker grounding (docs/adr/0004), optional and additive to the knowledge-base
+    # context above -- searched using the first customer message as a short, representative
+    # query rather than the full transcript.
+    grounding = await search_related_issues(query) if query else ""
     grounding_section = f"\n\n{grounding}" if grounding else ""
 
     return (
         "You are triaging a customer support conversation for a software product.\n\n"
-        f"Known issues / FAQ context:\n{load_knowledge_excerpt()}{grounding_section}\n\n"
+        f"Known issues / FAQ context:\n{knowledge_context}{grounding_section}\n\n"
         f"Conversation transcript (customer messages):\n{transcript}\n\n"
         "Classify this conversation by calling record_classification."
     )

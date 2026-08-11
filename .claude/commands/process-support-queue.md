@@ -9,12 +9,18 @@ docs/mcp-server.md and `.mcp.json`). This is a manually-maintained mirror of the
 implementation, not generated from it -- see docs/adr/0003, D6. If `SUPPORT_CATEGORIES` in `.env`
 has been changed from its default, use that list instead of the one below.
 
+**Knowledge-base search** (see [ADR 0006](../../docs/adr/0006-knowledge-base-rag.md)): if
+`rag-mcp` is connected to this session, prefer its `search_knowledge_base(query, top_k)` tool
+over reading `knowledge-base/*.md` files directly in step 4 below -- it's the same real semantic
+search `ai-service` uses, ranked by actual relevance rather than you reading every file. If
+`rag-mcp` isn't connected, fall back to reading the files directly.
+
 **Optional real grounding** (see [ADR 0004](../../docs/adr/0004-issue-tracker-grounding.md)): if
 Atlassian's official Jira MCP server and/or Microsoft's official Azure DevOps MCP server are
 *also* connected to this session, use their search tools (`searchJiraIssuesUsingJql`,
-`mcp_ado_search_workitem`) in step 4 below alongside the static `knowledge-base/` files -- same
-grounding `ai-service` does automatically, no extra code needed here since this is just another
-MCP connector.
+`mcp_ado_search_workitem`) in step 4 below alongside the knowledge-base search -- same grounding
+`ai-service` does automatically, no extra code needed here since this is just another MCP
+connector.
 
 ## Scope
 
@@ -34,9 +40,11 @@ Parse $ARGUMENTS:
    where `message_type` is `0` or `"incoming"` AND `private` is `false` -- these are the actual
    customer messages, not agent replies or prior AI notes. If there are none, skip this
    conversation.
-4. **Ground yourself.** Read `knowledge-base/known-issues/*.md` and `knowledge-base/faq/*.md` in
-   this repo for relevant known issues or FAQ answers before classifying -- don't guess at
-   product behavior that's actually documented there.
+4. **Ground yourself.** If `rag-mcp` is connected, call
+   `search_knowledge_base(query=<summary of the customer's message>, top_k=3)` for the most
+   relevant known-issue/FAQ documents. Otherwise, read `knowledge-base/known-issues/*.md` and
+   `knowledge-base/faq/*.md` directly. Either way, don't guess at product behavior that's
+   actually documented there.
 5. **Classify.** Decide:
    - `category` — one of: `Bug`, `Crash`, `Technical`, `Installation`, `Account`, `Performance`,
      `Billing`, `Feature Request`, `Feedback`, `Other`, `Spam` (case as written here; the tag

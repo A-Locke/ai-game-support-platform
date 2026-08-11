@@ -57,9 +57,11 @@ Full detail in [docs/architecture.md](docs/architecture.md).
 | **Human escalation + draft** | Flags conversations needing a human, with a reasoning note; optionally drafts a suggested reply as a private, agent-only note — never auto-sent. |
 
 Full detail, including error handling and idempotency, in
-[docs/ai-workflows.md](docs/ai-workflows.md). Classification can optionally be grounded against
-real Jira and/or Azure DevOps issues (each independently optional) instead of relying solely on
-the static demo knowledge base — see [ADR 0004](docs/adr/0004-issue-tracker-grounding.md).
+[docs/ai-workflows.md](docs/ai-workflows.md). Classification is grounded in real semantic search
+over the knowledge base (`rag-mcp`: pgvector + local, zero-cost embeddings — see
+[ADR 0006](docs/adr/0006-knowledge-base-rag.md)), and can optionally also be grounded against
+real Jira and/or Azure DevOps issues (each independently optional) — see
+[ADR 0004](docs/adr/0004-issue-tracker-grounding.md).
 
 ## MCP server
 
@@ -123,6 +125,7 @@ webhook, and load the demo.
 ```
 ai-service/        AI orchestration (FastAPI): webhook receiver, Claude client, workflows
 mcp-server/        Self-hosted MCP server: Chatwoot tool abstraction
+rag-mcp/           Self-hosted MCP server: semantic knowledge-base search (docs/adr/0006)
 backup/            Scheduled Postgres -> S3 backup/restore (docs/adr/0002)
 knowledge-base/    "ExampleCo" (fictional product) FAQ, known issues, release notes, sample tickets
 deployment/        Cloud Compose overlay (Caddy) and deployment notes
@@ -133,12 +136,12 @@ docs/              Architecture, AI workflows, MCP reference, setup, cost, ADRs
 ## Future extensions
 
 Third-party account context (CRM, billing provider) · automatic duplicate bug detection ·
-design-doc RAG grounding (Jira/Azure DevOps grounding already implemented — see
-[ADR 0004](docs/adr/0004-issue-tracker-grounding.md)) · a QA MCP integration (customer report → known issue →
-regression test → bug tracker; see
+a QA MCP integration (customer report → known issue → regression test → bug tracker; see
 [docs/architecture.md](docs/architecture.md#future-integration-direction-not-implemented)) ·
-automatic reproduction-test generation · knowledge-base maintenance · multilingual support ·
-a human feedback loop on draft quality (edited/accepted/discarded, not autonomy).
+automatic reproduction-test generation · multilingual support · a human feedback loop on draft
+quality (edited/accepted/discarded, not autonomy) · a real design-doc corpus for `rag-mcp`
+beyond the demo `knowledge-base/` content (chunking would matter at that scale — see
+[ADR 0006](docs/adr/0006-knowledge-base-rag.md)).
 
 **Permanently out of scope, not just deferred:** any workflow where the AI sends something to a
 customer directly, at any confidence level — see

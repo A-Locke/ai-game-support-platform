@@ -122,6 +122,36 @@ services:
       BACKUP_CRON_SCHEDULE: ${BACKUP_CRON_SCHEDULE:-0 3 * * *}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
+  # Self-hosted MCP server: semantic search over knowledge-base/ via pgvector (same Postgres
+  # instance as Chatwoot, its own schema) + local zero-cost embeddings. See docs/adr/0006.
+  rag-mcp:
+    build:
+      context: .
+      dockerfile: rag-mcp/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      RAG_POSTGRES_HOST: postgres
+      RAG_POSTGRES_PORT: 5432
+      RAG_POSTGRES_USERNAME: postgres
+      RAG_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatwoot}
+      RAG_POSTGRES_DATABASE: ${POSTGRES_DATABASE:-chatwoot}
+      RAG_KNOWLEDGE_BASE_DIR: /app/knowledge-base
+      RAG_AUTH_TOKEN: ${RAG_AUTH_TOKEN}
+      RAG_HTTP_HOST: 0.0.0.0
+      RAG_HTTP_PORT: 8200
+      RAG_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   mcp-server:
     build:
       context: ./mcp-server
@@ -168,6 +198,9 @@ services:
       AZURE_DEVOPS_MCP_URL: ${AZURE_DEVOPS_MCP_URL:-}
       AZURE_DEVOPS_MCP_PAT: ${AZURE_DEVOPS_MCP_PAT:-}
       GROUNDING_MAX_RESULTS: ${GROUNDING_MAX_RESULTS:-3}
+      RAG_MCP_URL: http://rag-mcp:8200/mcp
+      RAG_MCP_AUTH_TOKEN: ${RAG_AUTH_TOKEN}
+      RAG_TOP_K: ${RAG_TOP_K:-3}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "8000:8000"

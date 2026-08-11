@@ -30,7 +30,8 @@ else has a working local default.
 docker compose up -d
 ```
 
-This starts Postgres, Redis, Chatwoot (web + Sidekiq worker), `mcp-server`, and `backup` (inert
+This starts Postgres, Redis, Chatwoot (web + Sidekiq worker), `mcp-server`, `rag-mcp` (semantic
+knowledge-base search — see [ADR 0006](adr/0006-knowledge-base-rag.md)), and `backup` (inert
 until S3 is configured — see [Backups](#backups)). **`ai-service` is not included** — it's an
 opt-in profile (see [AI orchestration modes](#ai-orchestration-modes) below); add
 `--profile automated` to include it, or skip it entirely and drive `mcp-server` directly from a
@@ -43,6 +44,7 @@ if you're curious why). Give it a minute, then check:
 docker compose ps
 curl -I http://localhost:3000/      # Chatwoot -- 302 to the onboarding wizard means it's up
 curl http://localhost:8100/health   # mcp-server
+curl http://localhost:8200/health   # rag-mcp
 ```
 
 ### 3. Create the first Chatwoot admin and inbox

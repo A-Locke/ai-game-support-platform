@@ -497,3 +497,67 @@ reviewer, never used to bypass them) is still worth building for reviewer speed 
 yet implemented as of this entry.
 
 ---
+
+## Milestone 8 — Knowledge-base RAG (pgvector + fastembed)
+
+**Status:** complete
+**Date started:** 2026-08-11
+**Date completed:** 2026-08-11
+
+### Context
+
+No Jira/Azure DevOps credentials exist for this portfolio project (confirmed with the project
+owner), so the still-deferred design-doc RAG piece from ADR 0004 became the priority instead:
+real semantic search over `knowledge-base/`, replacing `knowledge.py`'s flat "dump every file
+into every prompt" approach. Asked directly whether pgvector in the same Postgres was the right
+call or whether a dedicated/managed vector DB would be better/cheaper/more standard — answered
+with a comparison (pgvector already running for Chatwoot itself = zero new infra; dedicated
+vector DBs are real infrastructure this project's own scope constraints already rule out at this
+corpus size) and a follow-up question on embeddings specifically, since that -- not storage --
+was the actual interesting decision. Local embeddings via `fastembed` (zero cost, zero new
+vendor) chosen over OpenAI/Voyage AI.
+
+### What was built
+
+`rag-mcp/`, a new self-hosted MCP server (mirrors `mcp-server`'s structure) with three tools:
+`search_knowledge_base`, `reindex_knowledge_base`, `index_status`. pgvector lives in its own
+`rag` schema of the *same* Postgres instance already running for Chatwoot (no new database
+service). Embeddings are `fastembed`'s default model (`BAAI/bge-small-en-v1.5`, 384-dim, ONNX
+Runtime), baked into the Docker image at build time rather than downloaded at first use. The
+corpus re-indexes fully on every container start (cheap at this scale) plus an on-demand
+`reindex_knowledge_base` tool. `ai-service/app/rag_client.py` calls it before building the
+classification prompt, falling back to the original flat dump if `RAG_MCP_URL` is unset or the
+call fails -- same graceful-degradation pattern as Jira/Azure DevOps grounding and S3 backups.
+Unlike those two, `rag-mcp` is wired *on by default* in `docker-compose.yml` (not opt-in) since
+it's a local, always-available, zero-cost part of the same stack, not an external vendor
+dependency. Full reasoning in
+[ADR 0006](docs/adr/0006-knowledge-base-rag.md). 13 new `rag-mcp` tests plus 6 new `ai-service`
+tests (rag_client + two prompt-building tests), all passing.
+
+### Verified live at every stage, including real semantic relevance -- not just "it runs"
+
+Before writing any service code: installed `fastembed`/`asyncpg`/`pgvector` for real and ran an
+actual embed → insert → cosine-search round trip against the live Chatwoot Postgres (which
+already has the `vector` extension from Milestone 1). Real result: a query about "app crashes
+exporting a large report" scored 0.92 against the matching known issue and 0.63 against an
+unrelated one -- genuine relevance ranking, not just plumbing that doesn't error.
+
+Then, after building the real service: built the actual Docker image (confirming the
+build-time model bake works), started it against the real Postgres, and hit a real bug on the
+first live tool call — `cannot perform operation: another operation is in progress`. Root cause:
+the startup reindex ran via its own `asyncio.run()` call (creating and then closing its own
+event loop), while the asyncpg connection pool it created stayed cached in a module global and
+was later reused from uvicorn's *different* event loop. Fixed by moving everything -- startup
+indexing and the server itself -- inside one `asyncio.run()` call sharing one event loop.
+Rebuilt, redeployed, and confirmed two different real queries ranked correctly through the full
+stack (HTTP, bearer auth, connection pooling, embeddings, pgvector): the export-crash query
+scored the matching known issue 0.800 vs. 0.582 for an unrelated one; a 2FA query correctly
+surfaced the FAQ (which covers 2FA) over the unrelated known issues.
+
+Finally, integrated into `ai-service`: rebuilt/redeployed it with the real `rag-mcp` URL wired
+in, and called `rag_client.search_knowledge_base` directly inside the running container against
+the real live `rag-mcp` service -- got back correctly-ranked, correctly-formatted real content
+ready to drop into the classification prompt, confirming the full chain (`ai-service` →
+`rag-mcp` → pgvector → fastembed) actually works end to end, not just each piece in isolation.
+
+---
