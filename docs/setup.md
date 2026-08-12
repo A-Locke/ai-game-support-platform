@@ -31,8 +31,11 @@ docker compose up -d
 ```
 
 This starts Postgres, Redis, Chatwoot (web + Sidekiq worker), `mcp-server`, `rag-mcp` (semantic
-knowledge-base search — see [ADR 0006](adr/0006-knowledge-base-rag.md)), and `backup` (inert
-until S3 is configured — see [Backups](#backups)). **`ai-service` is not included** — it's an
+knowledge-base search — see [ADR 0006](adr/0006-knowledge-base-rag.md)), `backup` (inert
+until S3 is configured — see [Backups](#backups)), and `widget-demo` (the customer-facing widget
+demo page on port 8080 -- see [Customer-facing support widget](#customer-facing-support-widget),
+included by default via the `demo` Compose profile in `.env.example`, drop it there if you don't
+want it running). **`ai-service` is not included** — it's an
 opt-in profile (see [AI orchestration modes](#ai-orchestration-modes) below); add
 `--profile automated` to include it, or skip it entirely and drive `mcp-server` directly from a
 Claude Code session or `ai-service`'s own CLI instead. A one-shot `chatwoot-prepare` service runs
@@ -45,6 +48,7 @@ docker compose ps
 curl -I http://localhost:3000/      # Chatwoot -- 302 to the onboarding wizard means it's up
 curl http://localhost:8100/health   # mcp-server
 curl http://localhost:8200/health   # rag-mcp
+curl -I http://localhost:8080/      # widget-demo -- 200 means the demo page is serving
 ```
 
 ### 3. Create the first Chatwoot admin and inbox
@@ -77,9 +81,10 @@ python scripts/configure_chatwoot.py
 
 This is idempotent — it creates the labels the AI workflows use (`spam`, `human-escalated`,
 `ai-draft`, plus one per configured category), the custom attributes `ai_category`,
-`ai_confidence`, and `ai_last_processed_message_id`, and (only relevant for **automated mode**,
-below) registers `ai-service`'s webhook URL for the `message_created` event. Only
-`message_created` is registered, not `conversation_created` — see
+`ai_confidence`, and `ai_last_processed_message_id`, registers `ai-service`'s webhook URL for the
+`message_created` event (only relevant for **automated mode**, below), and sets up the
+customer-facing live chat widget (see [Customer-facing support widget](#customer-facing-support-widget)).
+Only `message_created` is registered, not `conversation_created` — see
 [ai-workflows.md](ai-workflows.md#trigger) for why. Webhook delivery depends on
 `docker-compose.yml`'s `SAFE_FETCH_ALLOW_PRIVATE_NETWORK=true` on the Chatwoot services (already
 set by default) — Chatwoot refuses to deliver webhooks to private-network hostnames otherwise,
@@ -178,6 +183,35 @@ docker compose cp rag-mcp:/app/export ./obsidian-vault-export
 
 Then open `obsidian-vault-export/` as an Obsidian vault. This is a one-way snapshot, not something
 the running platform depends on, so it needs no configuration and adds nothing to `docker-compose.yml`.
+
+## Customer-facing support widget
+
+The inbox `scripts/run_demo.py` seeds tickets against (`Player Support`, an API-channel inbox)
+has no customer-facing surface at all, by design -- it exists for programmatic ticket creation,
+not for a real visitor to open in a browser. `scripts/configure_chatwoot.py` (step 4 above) also
+sets up a second inbox, `Website Live Chat`, Chatwoot's native live-chat widget, with a pre-chat
+form that requires an email address. Try it at `http://localhost:8080` -- served automatically by
+its own tiny `widget-demo` container (the `demo` Compose profile, on by default via
+`COMPOSE_PROFILES` in `.env.example`; clear it to skip running this once your own real site
+carries the embed script instead -- see [README.md](../README.md#customer-facing-widget) for that
+script). Found live: opening the page as a plain `file://` file instead of over real HTTP left
+the widget bubble not rendering at all -- a `file://` page is a null origin, and the widget's
+calls beyond the initial script tag behave differently there than from a real HTTP origin, hence
+a real (if minimal) container rather than "just open the file."
+
+Resolving a conversation from that inbox in the agent dashboard fires an automation rule that
+emails the transcript back to whatever address the visitor gave -- the closest thing to a
+"your ticket was fixed" notification without building a login/account system. This local dev
+setup has no SMTP configured, so real delivery can't be observed here, but the `chatwoot` and
+`chatwoot-sidekiq` container logs will show whether Chatwoot attempted it.
+
+Chatwoot has no built-in CAPTCHA for the widget -- since it's just a script tag on a page you
+control, that has to be layered on the embedding page itself. `widget-demo/index.html` includes a
+commented-out reference pattern (gate the widget behind a Cloudflare Turnstile challenge) rather
+than a live integration, since this project has no real domain to register a site key against.
+
+Full reasoning, including why a full login/ticket-history portal was ruled out, in
+[ADR 0009](adr/0009-customer-facing-support-widget.md).
 
 ## Backups
 

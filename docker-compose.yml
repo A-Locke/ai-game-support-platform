@@ -97,6 +97,28 @@ services:
     volumes:
       - chatwoot_storage:/app/storage
 
+  # Throwaway page embedding Chatwoot's live chat widget, standing in for "an existing company
+  # website" (see docs/adr/0009). Just a static file server -- no Dockerfile, no build step; the
+  # widget script itself talks straight to the chatwoot service, this container only serves the
+  # HTML. Found live: opening the file directly as file:// breaks the widget (a file:// page is a
+  # null origin, and the widget's calls beyond the initial script tag don't behave the same way
+  # from one) -- it has to be served over real HTTP, hence this container rather than "just open
+  # the file." On the "demo" profile, included by default via COMPOSE_PROFILES in .env.example --
+  # a real deployment embeds the same script (README.md) into its own actual website instead and
+  # can drop this profile (leave COMPOSE_PROFILES empty/unset) to skip running it entirely.
+  widget-demo:
+    image: python:3.12-alpine
+    restart: unless-stopped
+    profiles: ["demo"]
+    working_dir: /site
+    volumes:
+      - ./widget-demo:/site:ro
+    command: ["python", "-m", "http.server", "8080"]
+    ports:
+      - "8080:8080"
+    depends_on:
+      - chatwoot
+
   # Scheduled Postgres -> S3 backups, always on but inert until S3_BUCKET is set (see
   # docs/adr/0002, D8). Manual trigger: scripts/backup_now.sh. Restore: scripts/restore_from_s3.sh.
   backup:

@@ -736,3 +736,122 @@ intact (this time via `curl -D -`/`unzip`, not a shell argument, so no repeat of
 encoding issue).
 
 ---
+
+## Milestone 11 -- A real customer-facing entry point (ADR 0009), and a genuine bug found along the way
+
+**Status:** complete
+**Date started:** 2026-08-12
+**Date completed:** 2026-08-12
+
+### Context
+
+Testing the platform "from the user perspective" surfaced a real gap: the only configured inbox
+is an API-channel one with zero customer-facing surface, by design (it exists for
+`scripts/run_demo.py` and the webhook pipeline, not a browser). The project owner laid out two
+real options -- embed Chatwoot's live chat widget on an existing website, or build a full
+customer portal with login and ticket history -- and named two specific concerns with the widget
+path: no CAPTCHA, and no way for a customer to know their ticket got resolved without an account.
+Both turned out to be solvable through Chatwoot's own configuration surface rather than new
+building, once actually checked against the real API instead of assumed. Full reasoning in
+[ADR 0009](docs/adr/0009-customer-facing-support-widget.md).
+
+### What was built
+
+A second Chatwoot inbox (`Website Live Chat`, `Channel::WebWidget`) with a pre-chat form
+requiring an email address, and a native automation rule (`conversation_resolved` ->
+`send_email_transcript`) that emails the transcript back to that address when an agent resolves
+the conversation -- Chatwoot's own built-in answer to "how does the customer find out," not a
+custom notification system. CAPTCHA has no native Chatwoot equivalent (confirmed: Chatwoot's own
+spam handling is reactive -- mute/block after the fact, not a preventive challenge), so
+`widget-demo/index.html`, a throwaway page embedding the widget script exactly as a real company
+site would, includes an inert, commented-out reference implementation (gate widget loading behind
+a Cloudflare Turnstile challenge) rather than a live integration, since there's no real domain
+here to register a site key against. Both the inbox and the automation rule are now created by
+`scripts/configure_chatwoot.py` (idempotent, same pattern as the existing label/attribute/webhook
+setup), not just configured once by hand against the running instance.
+
+### Verified live, including a real bug that predates this session's work
+
+Created the inbox, pre-chat form, and automation rule through the real Chatwoot API (not the
+admin UI) and read every one back to confirm the stored configuration matched what was sent, not
+just a 200 status. Confirmed the widget's SDK script actually loads (`200` from
+`/packs/js/sdk.js`). Tried repeatedly to simulate a real widget-originated conversation through
+the API to check whether the resolve automation actually fires -- and hit a real, informative
+wall: Chatwoot's authenticated agent API explicitly rejects `message_type: incoming` for
+`Channel::WebWidget` inboxes ("Incoming messages are only allowed in Api inboxes"), and the
+widget's real message-send path isn't a simple REST call its SDK bundle exposes for scripting.
+Every resolved test conversation therefore had no genuine message content, and no mail-delivery
+attempt showed up in the `chatwoot`/`chatwoot-sidekiq` logs for any of them -- documented in
+ADR 0009 as an open verification gap (this environment also has no SMTP configured, confirmed via
+`.env`/`docker-compose.yml`, so real delivery couldn't be observed regardless), rather than
+quietly assumed to work.
+
+Along the way, running `scripts/configure_chatwoot.py` to make the new setup idempotent surfaced
+an unrelated, pre-existing bug: `ensure_webhook`'s existing-webhook check assumed
+`GET .../webhooks` returned `{"payload": [...]}`, but the real response is nested one level
+deeper (`{"payload": {"webhooks": [...]}}`) -- iterating the dict `.get("payload", [])` actually
+returned yielded its single string key (`"webhooks"`) instead of webhook records, crashing on
+`webhook["url"]` with `TypeError: string indices must be integers, not 'str'` on every
+invocation. This meant the script could never have completed a run that reached the automation
+rule setup below it, and -- more significantly -- the webhook itself could never have been
+successfully registered through this script, meaning the automated webhook-driven pipeline may
+never have actually had its webhook registered this way in past runs. Fixed by reading the nested
+key correctly; rerunning afterward showed `registered webhook for message_created -> ...` for the
+first time, confirming the fix and that no webhook existed before it. Rerunning the whole script
+a second time showed every step, including the two new ones, correctly reporting "already exists"
+-- real idempotency, not just written to look idempotent.
+
+### Follow-up: real browser testing found three more real bugs, one of them the actual root cause
+
+Everything above was verified against the API and logs, but the project owner's actual browser
+testing of `widget-demo/index.html` surfaced problems none of that caught -- a reminder of why
+this project insists on live testing beyond just "the API accepted it."
+
+**Bug 1: `file://` breaks the widget entirely.** Opening the demo page directly as a file left no
+chat bubble at all. A `file://` page is a null origin, and the widget's calls beyond the initial
+script tag don't behave the same way from one as from a real HTTP origin. Fixed first with a
+background `python -m http.server`, later made permanent as its own container (below).
+
+**Bug 2: the pre-chat form rendered the configured message text but not the actual email field**
+-- just a generic "Message" box, and a "Start Conversation" button that silently did nothing once
+an email was supposedly required. Root-caused by pulling Chatwoot's actual widget source from
+GitHub (`gh api repos/chatwoot/chatwoot/contents/...`, not guessed): `pre_chat_fields` entries
+have two independent, easy-to-confuse keys -- `field_type` (Chatwoot's own field kind, `standard`
+vs. a custom attribute) and `type` (fed straight into the widget's FormKit renderer as the literal
+input type). The original config had these backwards
+(`field_type: "email", type: "standard"`) -- "standard" reads like the right word for "this is a
+standard field," but it isn't a real FormKit input type, so the field never rendered, and a
+`required` field that can never be filled in silently blocks submission forever. Confirmed correct
+against Chatwoot's own test fixture
+(`app/javascript/widget/mixins/specs/configMixin.spec.js`) before reapplying. See ADR 0009, D1,
+for the full explanation; `scripts/configure_chatwoot.py` now bakes in the corrected shape.
+
+**Bug 3 (really a footgun, not a code bug): rate limiting and stale caching, both self-inflicted
+by testing.** Between the many API-driven test conversations and repeated widget reloads while
+debugging Bug 2, Chatwoot's own `rack::attack` throttling kicked in on the widget's endpoints --
+the bubble disappeared again, this time because `/widget` was returning `429`, not a config
+problem. Traced by checking Redis directly (`redis-cli KEYS "*rack::attack*widget*"`) and deleting
+the specific counter keys, which reset the throttle immediately instead of waiting out the window.
+Separately, after fixing Bug 2's schema, the widget kept serving the *previous* broken config
+until a versioned Redis cache key (`alfred:idb-cache-key-account-1-inbox`) was deleted and
+`chatwoot`/`chatwoot-sidekiq` were restarted -- both stateless app servers, safe to restart anytime
+since all real state lives in Postgres. Both gotchas are documented in ADR 0009, D5, so nobody
+else customizing this setup has to rediscover them from scratch.
+
+After all three fixes, the project owner confirmed the pre-chat form actually blocks message entry
+until an email is provided, and "Start Conversation" works.
+
+### Follow-up: containerized the demo page, on an opt-out Compose profile
+
+`widget-demo/index.html` now runs in its own tiny service (`python:3.12-alpine`,
+`python -m http.server`, no Dockerfile, bind-mounting the directory read-only) rather than
+requiring a manually-started background process -- directly closes Bug 1 above by construction,
+since it's always served over real HTTP. It's on the `demo` Compose profile, included by default
+via `COMPOSE_PROFILES=demo` in `.env.example` (the same profile mechanism `ai-service` already
+used, just inverted -- on by default here instead of opt-in), so `docker compose up -d` with no
+extra flags includes it, and clearing that variable excludes it once a real deployment is
+embedding the same script into its own actual site. The real embed snippet is now also documented
+directly in the top-level README, not just buried in `widget-demo/index.html` or the ADR, since
+that's the piece someone integrating this for real actually needs to copy.
+
+---

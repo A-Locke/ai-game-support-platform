@@ -79,6 +79,43 @@ HTTP (no SSE, no server-side session) for networked deployments, including Googl
 scale-to-zero model. Full tool reference and security model in
 [docs/mcp-server.md](docs/mcp-server.md).
 
+## Customer-facing widget
+
+Chatwoot's own live chat widget is the customer entry point -- not a custom-built frontend, just
+its standard embed script pointed at your inbox's website token:
+
+```html
+<script>
+  (function (d, t) {
+    var BASE_URL = "https://your-chatwoot-domain";
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = BASE_URL + "/packs/js/sdk.js";
+    g.async = true;
+    s.parentNode.insertBefore(g, s);
+    g.onload = function () {
+      window.chatwootSDK.run({
+        websiteToken: "YOUR_WEBSITE_TOKEN",
+        baseUrl: BASE_URL,
+      });
+    };
+  })(document, "script");
+</script>
+```
+
+Drop that into any page on your real site (swap in your own `baseUrl`/`websiteToken` from
+**Inbox settings → Configuration** in the Chatwoot dashboard) and the widget just works -- a
+pre-chat form collects the visitor's email, and a "conversation resolved" automation rule emails
+them a transcript when their ticket is closed, all native Chatwoot configuration, no code beyond
+this snippet. Chatwoot has no built-in CAPTCHA, so that's layered on the embedding page itself --
+`widget-demo/index.html` has a commented-out Cloudflare Turnstile reference implementation. Full
+reasoning in [ADR 0009](docs/adr/0009-customer-facing-support-widget.md).
+
+`widget-demo/` (served at `http://localhost:8080` by its own tiny container) is a throwaway page
+using exactly this snippet, standing in for a real company site — useful for trying the whole
+flow locally. It runs on the `demo` Compose profile, on by default (`COMPOSE_PROFILES=demo` in
+`.env.example`); clear that once you're embedding the widget in your own real site instead of
+using the stand-in page.
+
 ## Deployment
 
 **Local:** `docker compose up -d` runs Chatwoot, Postgres, Redis, `mcp-server`, and scheduled
@@ -134,6 +171,7 @@ mcp-server/        Self-hosted MCP server: Chatwoot tool abstraction
 rag-mcp/           Self-hosted MCP server: semantic knowledge-base search + ingestion UI (docs/adr/0006, 0007)
 backup/            Scheduled Postgres -> S3 backup/restore (docs/adr/0002)
 knowledge-base/    "ExampleCo" (fictional product) FAQ, known issues, release notes, sample tickets
+widget-demo/       Throwaway page embedding Chatwoot's live chat widget (docs/adr/0009)
 deployment/        Cloud Compose overlay (Caddy) and deployment notes
 scripts/           Chatwoot configuration, demo seeding, backup/restore triggers
 docs/              Architecture, AI workflows, MCP reference, setup, cost, ADRs

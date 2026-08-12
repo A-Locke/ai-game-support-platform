@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ExampleCo (widget demo)</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 3rem auto; padding: 0 1rem; color: #1a1a1a; line-height: 1.5; }
+  h1 { font-size: 1.6rem; }
+  .note { background: #fff8e1; border: 1px solid #f0d878; padding: 1rem; border-radius: 4px; margin: 1.5rem 0; font-size: 0.9rem; }
+  code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>ExampleCo</h1>
+<p>This is a throwaway page standing in for a real company website -- the chat bubble in the
+bottom-right corner is the actual Chatwoot live chat widget (Option A, see
+<a href="../docs/adr/0009-customer-facing-support-widget.md">ADR 0009</a>), embedded exactly the
+way it'd be embedded on a real site: one script tag, nothing custom-built.</p>
+
+<div class="note">
+<strong>Note:</strong> this widget talks to the local <code>chatwoot</code> container at
+<code>http://localhost:3000</code>. This page is served by its own tiny <code>widget-demo</code>
+container (see <code>docker-compose.yml</code>) at <code>http://localhost:8080</code> -- it
+starts automatically with <code>docker compose up -d</code>, nothing extra to run. Found live:
+opening this file directly as <code>file://</code> instead of over real HTTP leaves the widget
+bubble not rendering at all -- a <code>file://</code> page is a null origin, and the widget's
+calls beyond the initial script tag don't behave the same way from one.
+</div>
+
+<p>Try it: click the chat bubble, fill in the pre-chat form (name + <strong>email is
+required</strong>), send a message. In the Chatwoot agent dashboard
+(<a href="http://localhost:3000">localhost:3000</a>, "Website Live Chat" inbox), marking that
+conversation as Resolved fires an automation rule that emails a transcript back to whatever
+address was given -- see ADR 0009 for why there's no SMTP configured to actually deliver it in
+this environment, and how that part was verified instead.</p>
+
+<!--
+  CAPTCHA / bot-protection reference (ADR 0009, D3) -- Chatwoot has no built-in widget CAPTCHA,
+  so this has to live on the embedding page, not in Chatwoot. This project has no real domain to
+  register a live Cloudflare Turnstile site key against, so this is left as an inert, documented
+  example rather than a working integration -- swap in a real site key and this becomes real:
+
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <div class="cf-turnstile" data-sitekey="YOUR_SITE_KEY" data-callback="onTurnstileSuccess"></div>
+  <script>
+    // Only load the chat widget after a human passes the challenge.
+    function onTurnstileSuccess(token) {
+      var script = document.createElement("script");
+      script.src = "http://localhost:3000/packs/js/sdk.js";
+      script.onload = function () {
+        window.chatwootSDK.run({ websiteToken: "G9rzp2dyEXzJV8McxoThzBgN", baseUrl: "http://localhost:3000" });
+      };
+      document.body.appendChild(script);
+    }
+  </script>
+-->
+
+<script>
+  (function (d, t) {
+    var BASE_URL = "http://localhost:3000";
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = BASE_URL + "/packs/js/sdk.js";
+    g.async = true;
+    s.parentNode.insertBefore(g, s);
+    g.onload = function () {
+      window.chatwootSDK.run({
+        websiteToken: "G9rzp2dyEXzJV8McxoThzBgN",
+        baseUrl: BASE_URL,
+      });
+    };
+  })(document, "script");
+</script>
+</body>
+</html>
