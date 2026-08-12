@@ -561,3 +561,72 @@ ready to drop into the classification prompt, confirming the full chain (`ai-ser
 `rag-mcp` → pgvector → fastembed) actually works end to end, not just each piece in isolation.
 
 ---
+
+## Milestone 9 — Knowledge-base ingestion UI
+
+**Status:** complete
+**Date started:** 2026-08-12
+**Date completed:** 2026-08-12
+
+### Context
+
+Milestone 8 gave `rag-mcp` real semantic search, but adding a document still meant a filesystem
+edit plus an MCP call -- fine for whoever deploys the stack, a real barrier for QA/CS staff, who
+are the people who actually have the knowledge worth adding and have no reason to touch a server
+filesystem or an MCP client. The project owner asked for a small UI aimed at exactly that
+audience, to eliminate that human handoff -- deliberately the first UI anywhere in this project
+(the brief's "no custom frontend" constraint is about not rebuilding Chatwoot's *agent* interface,
+a different question from a small internal tool for a different audience entirely).
+
+### What was built
+
+A handful of additional Starlette routes (`/ui`, `/ui/documents`, `/ui/documents/delete`,
+`/ui/search`) on the same app `rag-mcp` already runs -- no new service, no JS framework, no build
+step, plain server-rendered Jinja2 templates. Documents added through the UI are embedded and
+upserted directly into the same `rag.documents` table Milestone 8 built, with a synthetic
+`source_path` under `ui/<category>/...` -- no file is written to disk, so UI-added documents get
+S3 backup coverage for free but are invisible to `ai-service`'s flat-file fallback (accepted:
+nobody runs the ingestion UI in a deployment with RAG disabled in the first place). `/ui/*` is
+gated by a new `BasicAuthMiddleware` (`RAG_UI_USERNAME`/`RAG_UI_PASSWORD`) -- a different
+mechanism and a different credential from the bearer token that continues to protect `/mcp`,
+since a browser has no natural way to attach a bearer header. Both middlewares fail closed and
+use `secrets.compare_digest`. The UI also includes a self-serve search test, so the person who
+added a document can confirm it's actually being found without asking an engineer to check.
+
+Following on directly from the project owner testing the UI in a browser: file upload support
+(gated to `.md` only for now -- no document-conversion surface to get wrong), and title
+auto-fill from the uploaded filename (minus extension) when the title field is left blank, both
+client-side (so the user sees it happen) and server-side (so it holds without JS). An explicitly
+typed title always wins over the filename. Full reasoning in
+[ADR 0007](docs/adr/0007-knowledge-base-ingestion-ui.md). 21 new `rag-mcp` tests (auth middleware
++ UI routes, including upload happy/error paths and an explicit XSS-escaping check on
+user-submitted titles), all passing alongside the existing suite.
+
+### Verified live, including a real bug in the test tooling itself (not the app)
+
+Rebuilt the `rag-mcp` image and redeployed against the real running Postgres after each of the
+three build passes (base UI, file upload, title auto-fill). Full flow driven with `curl` against
+the live container each time: unauthenticated and wrong-credential requests to `/ui` correctly
+rejected (401, with a `WWW-Authenticate` header); a bearer token that works on `/mcp` correctly
+rejected on `/ui` and vice versa, confirming the two middlewares don't leak into each other's
+paths. Added a real document via the form, confirmed it appeared in the listing, then ran a
+test search with different wording than the title ("customer says the CSV download keeps
+failing" against a document titled "Export crashes on large CSV files") and got it back
+top-ranked at 0.71 -- genuine semantic relevance, not just an exact-string match. Deleted it,
+confirmed it disappeared, confirmed re-deleting the same path correctly 404s instead of silently
+succeeding twice.
+
+For file upload specifically: uploading a real `.md` file worked end to end (content extracted,
+embedded, semantically searchable); uploading a `.txt` file was correctly rejected with an error
+message instead of silently accepted. The one real bug hit during this milestone was in the test
+harness, not the application: `curl -F content_file=@/tmp/...` silently failed
+(`Failed to open/read local data from file`) when passed an MSYS-style `/tmp/...` path on
+Windows -- curl.exe doesn't understand MSYS paths the way the shell does, unlike plain URL/data
+arguments that Git Bash rewrites for you. Fixed by resolving the real Windows path with
+`cygpath -w` before handing it to `curl -F`.
+
+The project owner then did their own manual pass through the actual browser UI, which surfaced
+the title auto-fill request directly -- the filename was landing in the title field with the
+`.md` extension still attached before that fix went in.
+
+---

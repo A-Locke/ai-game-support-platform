@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     http_host: str = "0.0.0.0"
     http_port: int = 8200
 
+    # Ingestion UI (docs/adr/0007) -- a separate credential from auth_token above, since the
+    # audience is different (a human in a browser, not a service presenting a bearer token).
+    # Fails closed like everything else here: an unset ui_password means the UI refuses to serve.
+    ui_username: str = "admin"
+    ui_password: str = ""
+
     log_level: str = "INFO"
 
 

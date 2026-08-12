@@ -138,6 +138,23 @@ as a documented feature.
 Both commands are manually-maintained mirrors of `ai-service`'s Python logic, not generated from
 it — see [ADR 0003, D6](adr/0003-ai-orchestration-deployment-modes.md#d6-the-playbook-is-a-manually-maintained-parallel-implementation-not-generated-from-python).
 
+## Knowledge base ingestion UI
+
+QA/CS staff can add, remove, and test-search knowledge-base documents without touching the
+filesystem or an MCP client, at `http://localhost:8200/ui` — see
+[ADR 0007](adr/0007-knowledge-base-ingestion-ui.md). It's server-rendered HTML behind HTTP Basic
+Auth, a separate credential from `rag-mcp`'s own `RAG_AUTH_TOKEN` bearer token used by
+`ai-service`/MCP clients:
+
+```bash
+RAG_UI_USERNAME=admin
+RAG_UI_PASSWORD=            # required -- rag-mcp refuses to serve /ui if this is unset
+```
+
+Documents added through the UI are embedded and stored directly in Postgres (no file written),
+so they're covered by the same [S3 backups](#backups) as everything else, but won't show up if
+you're inspecting the `knowledge-base/` folder on disk.
+
 ## Backups
 
 The `backup` service dumps the Chatwoot Postgres database to S3 on a schedule (default: daily at

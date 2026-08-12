@@ -91,3 +91,21 @@ async def count_documents(pool: asyncpg.Pool) -> int:
     schema = settings.schema_name
     async with pool.acquire() as conn:
         return await conn.fetchval(f"SELECT count(*) FROM {schema}.documents")
+
+
+async def list_documents(pool: asyncpg.Pool) -> list[dict]:
+    """All documents, newest-first -- used by the ingestion UI (docs/adr/0007)."""
+    schema = settings.schema_name
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT source_path, title, content, indexed_at FROM {schema}.documents ORDER BY indexed_at DESC"
+        )
+    return [dict(r) for r in rows]
+
+
+async def delete_document(pool: asyncpg.Pool, source_path: str) -> bool:
+    """Returns True if a document was actually deleted."""
+    schema = settings.schema_name
+    async with pool.acquire() as conn:
+        result = await conn.execute(f"DELETE FROM {schema}.documents WHERE source_path = $1", source_path)
+    return result != "DELETE 0"

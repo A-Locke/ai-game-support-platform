@@ -61,7 +61,9 @@ Full detail, including error handling and idempotency, in
 over the knowledge base (`rag-mcp`: pgvector + local, zero-cost embeddings — see
 [ADR 0006](docs/adr/0006-knowledge-base-rag.md)), and can optionally also be grounded against
 real Jira and/or Azure DevOps issues (each independently optional) — see
-[ADR 0004](docs/adr/0004-issue-tracker-grounding.md).
+[ADR 0004](docs/adr/0004-issue-tracker-grounding.md). QA/CS staff can add to that knowledge base
+themselves — paste text or upload a `.md` file — through a small ingestion UI at `/ui`, with no
+filesystem or MCP access required; see [ADR 0007](docs/adr/0007-knowledge-base-ingestion-ui.md).
 
 ## MCP server
 
@@ -125,7 +127,7 @@ webhook, and load the demo.
 ```
 ai-service/        AI orchestration (FastAPI): webhook receiver, Claude client, workflows
 mcp-server/        Self-hosted MCP server: Chatwoot tool abstraction
-rag-mcp/           Self-hosted MCP server: semantic knowledge-base search (docs/adr/0006)
+rag-mcp/           Self-hosted MCP server: semantic knowledge-base search + ingestion UI (docs/adr/0006, 0007)
 backup/            Scheduled Postgres -> S3 backup/restore (docs/adr/0002)
 knowledge-base/    "ExampleCo" (fictional product) FAQ, known issues, release notes, sample tickets
 deployment/        Cloud Compose overlay (Caddy) and deployment notes

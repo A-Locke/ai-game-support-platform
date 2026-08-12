@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Knowledge Base — rag-mcp</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; margin-top: 2.5rem; border-bottom: 1px solid #ddd; padding-bottom: 0.3rem; }
+  form { margin: 1rem 0; }
+  label { display: block; font-weight: 600; margin-top: 0.75rem; font-size: 0.9rem; }
+  input[type=text], select, textarea { width: 100%; padding: 0.5rem; margin-top: 0.25rem; box-sizing: border-box; font: inherit; }
+  textarea { min-height: 140px; }
+  button { margin-top: 1rem; padding: 0.5rem 1.2rem; cursor: pointer; }
+  .message { padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .message.success { background: #e6f4ea; color: #1e4620; }
+  .message.error { background: #fce8e6; color: #611a15; }
+  table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #eee; font-size: 0.9rem; vertical-align: top; }
+  .muted { color: #666; font-size: 0.85rem; }
+  .delete-btn { background: none; border: none; color: #b3261e; cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
+  .score { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<h1>Knowledge Base</h1>
+<p class="muted">Add, remove, and test-search documents the AI support workflow uses for grounding. See docs/adr/0007.</p>
+
+{% if message %}
+<div class="message {{ 'error' if error else 'success' }}">{{ message }}</div>
+{% endif %}
+
+<h2>Add a document</h2>
+<form method="post" action="/ui/documents" enctype="multipart/form-data">
+  <label for="title">Title</label>
+  <input type="text" id="title" name="title" required>
+
+  <label for="category">Category</label>
+  <select id="category" name="category">
+    <option value="known-issues">Known issue</option>
+    <option value="faq">FAQ</option>
+    <option value="release-notes">Release notes</option>
+    <option value="other">Other</option>
+  </select>
+
+  <label for="content">Content</label>
+  <textarea id="content" name="content" placeholder="Paste content here, or upload a .md file below instead"></textarea>
+
+  <label for="content_file">Or upload a .md file</label>
+  <input type="file" id="content_file" name="content_file" accept=".md"
+         onchange="if (!document.getElementById('title').value && this.files[0]) { document.getElementById('title').value = this.files[0].name.replace(/\.md$/i, ''); }">
+  <p class="muted">Only .md files are supported right now. If both a file and pasted text are given, the file wins. Title auto-fills from the filename if left blank.</p>
+
+  <button type="submit">Add and index</button>
+</form>
+
+<h2>Test search</h2>
+<form method="get" action="/ui/search">
+  <label for="q">Query</label>
+  <input type="text" id="q" name="q" value="{{ query or '' }}" placeholder="e.g. customer says export keeps crashing">
+  <button type="submit">Search</button>
+</form>
+
+{% if search_results is not none %}
+  {% if search_results %}
+  <table>
+    <thead><tr><th>Relevance</th><th>Title</th><th>Excerpt</th></tr></thead>
+    <tbody>
+    {% for r in search_results %}
+      <tr>
+        <td class="score">{{ "%.2f"|format(r.score) }}</td>
+        <td>{{ r.title }}</td>
+        <td>{{ r.content[:160] }}{{ "…" if r.content|length > 160 else "" }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No results.</p>
+  {% endif %}
+{% endif %}
+
+<h2>Indexed documents ({{ documents|length }})</h2>
+<table>
+  <thead><tr><th>Title</th><th>Source</th><th>Indexed</th><th></th></tr></thead>
+  <tbody>
+  {% for doc in documents %}
+    <tr>
+      <td>{{ doc.title }}</td>
+      <td class="muted">{{ doc.source_path }}</td>
+      <td class="muted">{{ doc.indexed_at.strftime("%Y-%m-%d %H:%M UTC") }}</td>
+      <td>
+        <form method="post" action="/ui/documents/delete" onsubmit="return confirm('Delete this document?');">
+          <input type="hidden" name="source_path" value="{{ doc.source_path }}">
+          <button type="submit" class="delete-btn">Delete</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+</body>
+</html>

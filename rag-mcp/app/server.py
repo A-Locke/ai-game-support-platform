@@ -46,17 +46,39 @@ async def _run_http() -> None:
     from starlette.responses import JSONResponse
     from starlette.routing import Mount, Route
 
-    from app.auth import BearerAuthMiddleware
+    from app.auth import BasicAuthMiddleware, BearerAuthMiddleware
+    from app.ui import ui_create_document, ui_delete_document, ui_index, ui_search
 
     async def health(request):
         return JSONResponse({"status": "ok"})
 
+    # /ui/* routes must be listed before the catch-all Mount("/", mcp_app) below -- Starlette
+    # tries routes in order, so anything not matched here (in practice just /mcp) falls through
+    # to the mount. Confirmed with a real Starlette TestClient before wiring this in for real.
     mcp_app = mcp.http_app(stateless_http=True)
     app = Starlette(
-        routes=[Route("/health", health), Mount("/", app=mcp_app)],
+        routes=[
+            Route("/health", health),
+            Route("/ui", ui_index, methods=["GET"]),
+            Route("/ui/documents", ui_create_document, methods=["POST"]),
+            Route("/ui/documents/delete", ui_delete_document, methods=["POST"]),
+            Route("/ui/search", ui_search, methods=["GET"]),
+            Mount("/", app=mcp_app),
+        ],
         lifespan=mcp_app.lifespan,
     )
-    app.add_middleware(BearerAuthMiddleware, expected_token=settings.auth_token, unprotected_paths={"/health"})
+    app.add_middleware(
+        BearerAuthMiddleware,
+        expected_token=settings.auth_token,
+        unprotected_paths={"/health"},
+        unprotected_prefixes=("/ui",),
+    )
+    app.add_middleware(
+        BasicAuthMiddleware,
+        username=settings.ui_username,
+        expected_password=settings.ui_password,
+        protected_prefix="/ui",
+    )
 
     port = int(os.environ.get("PORT", settings.http_port))
     config = uvicorn.Config(app, host=settings.http_host, port=port)
