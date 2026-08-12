@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Knowledge Base Graph — rag-mcp</title>
+<script src="/ui/static/cytoscape.min.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 0; color: #1a1a1a; }
+  header { padding: 1rem 1.5rem 0.5rem; }
+  h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
+  .muted { color: #666; font-size: 0.85rem; margin: 0; }
+  header a { color: #1a56db; text-decoration: none; }
+  #cy { width: 100%; height: calc(100vh - 90px); }
+  #empty-state { padding: 2rem 1.5rem; color: #666; display: none; }
+  .legend { padding: 0 1.5rem 0.5rem; font-size: 0.8rem; color: #444; }
+  .legend span { display: inline-block; margin-right: 1rem; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 0.3rem; vertical-align: middle; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Knowledge Base Graph</h1>
+  <p class="muted"><a href="/ui">&larr; Back to document list</a> — nodes are documents, edges are
+  [[wikilinks]] between them (see docs/adr/0008). Isolated nodes have no linked content yet.</p>
+</header>
+<div class="legend">
+  <span><i style="background:#4f8ff7"></i>known-issues</span>
+  <span><i style="background:#f7a94f"></i>faq</span>
+  <span><i style="background:#5fbf6f"></i>release-notes</span>
+  <span><i style="background:#999"></i>other</span>
+</div>
+<div id="cy"></div>
+<div id="empty-state">No documents indexed yet.</div>
+
+<script>
+const CATEGORY_COLORS = {
+  "known-issues": "#4f8ff7",
+  "faq": "#f7a94f",
+  "release-notes": "#5fbf6f",
+  "other": "#999",
+};
+
+fetch("/ui/graph-data")
+  .then((r) => r.json())
+  .then((data) => {
+    if (!data.nodes.length) {
+      document.getElementById("cy").style.display = "none";
+      document.getElementById("empty-state").style.display = "block";
+      return;
+    }
+    cytoscape({
+      container: document.getElementById("cy"),
+      elements: {
+        nodes: data.nodes.map((n) => ({ data: { id: n.id, label: n.label, category: n.category } })),
+        edges: data.edges.map((e, i) => ({ data: { id: "e" + i, source: e.source, target: e.target, relation: e.relation } })),
+      },
+      style: [
+        {
+          selector: "node",
+          style: {
+            "background-color": (el) => CATEGORY_COLORS[el.data("category")] || CATEGORY_COLORS.other,
+            "label": "data(label)",
+            "font-size": "10px",
+            "width": 28,
+            "height": 28,
+            "text-wrap": "wrap",
+            "text-max-width": "80px",
+            "text-valign": "bottom",
+            "text-margin-y": 4,
+          },
+        },
+        {
+          selector: "edge",
+          style: {
+            "width": 2,
+            "line-color": "#bbb",
+            "target-arrow-color": "#bbb",
+            "target-arrow-shape": "triangle",
+            "curve-style": "bezier",
+          },
+        },
+      ],
+      layout: { name: "cose", animate: false, padding: 40 },
+    });
+  });
+</script>
+</body>
+</html>

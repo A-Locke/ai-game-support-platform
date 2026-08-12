@@ -24,7 +24,7 @@
 </head>
 <body>
 <h1>Knowledge Base</h1>
-<p class="muted">Add, remove, and test-search documents the AI support workflow uses for grounding. See docs/adr/0007.</p>
+<p class="muted">Add, remove, and test-search documents the AI support workflow uses for grounding. See docs/adr/0007. <a href="/ui/graph">View as graph &rarr;</a> &middot; <a href="/ui/vault-download">Download as Obsidian vault (.zip) &darr;</a></p>
 
 {% if message %}
 <div class="message {{ 'error' if error else 'success' }}">{{ message }}</div>
@@ -45,6 +45,7 @@
 
   <label for="content">Content</label>
   <textarea id="content" name="content" placeholder="Paste content here, or upload a .md file below instead"></textarea>
+  <p class="muted">Type <code>[[Another Document's Title]]</code> anywhere in the content to link it to that document (see the graph view).</p>
 
   <label for="content_file">Or upload a .md file</label>
   <input type="file" id="content_file" name="content_file" accept=".md"
@@ -86,7 +87,12 @@
   <tbody>
   {% for doc in documents %}
     <tr>
-      <td>{{ doc.title }}</td>
+      <td>
+        {{ doc.title }}
+        {% if doc.backlink_titles %}
+        <div class="muted">Linked from: {{ doc.backlink_titles|join(", ") }}</div>
+        {% endif %}
+      </td>
       <td class="muted">{{ doc.source_path }}</td>
       <td class="muted">{{ doc.indexed_at.strftime("%Y-%m-%d %H:%M UTC") }}</td>
       <td>

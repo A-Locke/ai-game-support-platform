@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastmcp import FastMCP
 
 from app.config import settings
-from app.db import count_documents, get_pool, search
+from app.db import count_documents, get_backlinks, get_links, get_pool, search
 from app.embeddings import embed_one
 from app.indexer import reindex
 
@@ -17,7 +17,10 @@ mcp = FastMCP(
         "semantically relevant documents for a query -- use it to ground a classification or "
         "reply in real known-issue/FAQ content instead of guessing. reindex_knowledge_base() "
         "re-embeds the corpus on demand (e.g. after editing a file) without restarting the "
-        "server. index_status() reports how many documents are currently indexed."
+        "server. index_status() reports how many documents are currently indexed. "
+        "related_documents(source_path) returns documents directly linked to/from a given one, "
+        "via [[wikilinks]] in this demo corpus (see docs/adr/0008) -- useful for pulling in "
+        "context a pure semantic-similarity search would miss, e.g. a known issue's related FAQ."
     ),
 )
 
@@ -46,3 +49,18 @@ async def index_status() -> dict:
     pool = await get_pool()
     count = await count_documents(pool)
     return {"document_count": count}
+
+
+@mcp.tool()
+async def related_documents(source_path: str) -> dict:
+    """Documents directly linked to/from source_path -- outgoing [[wikilinks]] and incoming
+    backlinks (documents that link to this one). Empty lists if source_path has no relationships
+    or doesn't exist."""
+    pool = await get_pool()
+    outgoing = await get_links(pool, source_path)
+    incoming = await get_backlinks(pool, source_path)
+    return {
+        "source_path": source_path,
+        "links": [{**doc, "direction": "outgoing"} for doc in outgoing],
+        "backlinks": [{**doc, "direction": "incoming"} for doc in incoming],
+    }

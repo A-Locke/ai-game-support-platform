@@ -54,3 +54,65 @@ async def test_reindex_returns_zero_and_logs_when_no_files_found(tmp_path, monke
     count = await indexer.reindex()
 
     assert count == 0
+
+
+def test_extract_wikilinks_finds_all_and_dedupes():
+    content = "See [[Known Issue A]] and also [[Known Issue B]]. Again: [[Known Issue A]]."
+
+    assert indexer.extract_wikilinks(content) == ["Known Issue A", "Known Issue B"]
+
+
+def test_extract_wikilinks_returns_empty_list_when_none_present():
+    assert indexer.extract_wikilinks("no links here") == []
+
+
+def test_extract_wikilinks_strips_whitespace_and_skips_empty():
+    content = "[[  Padded Title  ]] and [[]]"
+
+    assert indexer.extract_wikilinks(content) == ["Padded Title"]
+
+
+async def test_reindex_resolves_wikilinks_after_upserting_everything(tmp_path, monkeypatch):
+    (tmp_path / "known-issues").mkdir()
+    (tmp_path / "known-issues" / "a.md").write_text(
+        "# Doc A\n\nSee [[Doc B]] for details.", encoding="utf-8"
+    )
+    (tmp_path / "known-issues" / "b.md").write_text("# Doc B\n\nNo links here.", encoding="utf-8")
+    monkeypatch.setattr(settings, "knowledge_base_dir", str(tmp_path))
+
+    monkeypatch.setattr(indexer, "get_pool", lambda: _async_return("fake-pool"))
+
+    async def _fake_ensure_schema(pool):
+        pass
+
+    monkeypatch.setattr(indexer, "ensure_schema", _fake_ensure_schema)
+
+    upserted = []
+
+    async def _fake_upsert(pool, source_path, title, content, embedding):
+        upserted.append(source_path)
+
+    monkeypatch.setattr(indexer, "upsert_document", _fake_upsert)
+    monkeypatch.setattr(indexer, "embed_many", lambda texts: [[0.1]] * len(texts))
+
+    link_calls = []
+
+    async def _fake_replace_links(pool, source_path, target_titles):
+        link_calls.append((source_path, target_titles))
+        return []
+
+    monkeypatch.setattr(indexer, "replace_links", _fake_replace_links)
+
+    count = await indexer.reindex()
+
+    assert count == 2
+    # Both documents must already be upserted before link resolution runs.
+    assert len(upserted) == 2
+    assert len(link_calls) == 1
+    source_path, target_titles = link_calls[0]
+    assert source_path.endswith("a.md")
+    assert target_titles == ["Doc B"]
+
+
+async def _async_return(value):
+    return value

@@ -155,6 +155,30 @@ Documents added through the UI are embedded and stored directly in Postgres (no 
 so they're covered by the same [S3 backups](#backups) as everything else, but won't show up if
 you're inspecting the `knowledge-base/` folder on disk.
 
+### Linking documents and the graph view
+
+Type `[[Another Document's Title]]` anywhere in a document's content (pasted, uploaded, or in a
+`knowledge-base/` file) to link it to that document, resolved by title match at index time. See
+it rendered as an actual graph at `http://localhost:8200/ui/graph`, or query relationships
+programmatically via the `related_documents` MCP tool. Full design (including how this is meant
+to scale to a real, large issue-tracker-backed knowledge base) in
+[ADR 0008](adr/0008-knowledge-base-at-scale.md).
+
+A read-only snapshot of the whole knowledge base can also be exported as a folder of real `.md`
+files with matching `[[wikilinks]]`, browsable in [Obsidian](https://obsidian.md) for its own
+(more polished) graph view. The **"Download as Obsidian vault (.zip)"** link on `/ui` does this
+in one click, no shell or SSH access to the server needed (it reuses the same Basic Auth already
+protecting `/ui`) -- unzip it locally and open the folder as an Obsidian vault. Whoever's already
+operating the server can get the same thing without going through the browser:
+
+```bash
+docker compose exec rag-mcp python -m app.export_vault
+docker compose cp rag-mcp:/app/export ./obsidian-vault-export
+```
+
+Then open `obsidian-vault-export/` as an Obsidian vault. This is a one-way snapshot, not something
+the running platform depends on, so it needs no configuration and adds nothing to `docker-compose.yml`.
+
 ## Backups
 
 The `backup` service dumps the Chatwoot Postgres database to S3 on a schedule (default: daily at

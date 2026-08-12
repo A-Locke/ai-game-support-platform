@@ -630,3 +630,109 @@ the title auto-fill request directly -- the filename was landing in the title fi
 `.md` extension still attached before that fix went in.
 
 ---
+
+## Milestone 10 -- Graph-augmented retrieval and a knowledge-base-at-scale design (ADR 0008)
+
+**Status:** complete
+**Date started:** 2026-08-12
+**Date completed:** 2026-08-12
+
+### Context
+
+The project owner asked what changes if the real knowledge base were the entire history of a
+real deployment (a full Jira/Azure DevOps dump, a real design-doc corpus, scraped support pages)
+rather than the small demo corpus, and wanted the tradeoffs researched, not assumed. That
+discussion covered several off-the-shelf alternatives -- an Azure-native stack (Logic Apps + Azure
+AI Search), Onyx (formerly Danswer, an open-source enterprise RAG platform) -- both evaluated and
+set aside, plus lighter-weight approaches (a plain Postgres adjacency table for relationships,
+Apache AGE as a named upgrade path). Also asked directly: is Obsidian even the right reference
+point here, or is there something better -- which is what led to evaluating Onyx and the Azure
+path in the first place, before landing back on a hand-built, Postgres-only approach as the right
+scope for this project specifically. The full evaluation, including what was rejected and why, is
+written up in [ADR 0008](docs/adr/0008-knowledge-base-at-scale.md).
+
+### What was built
+
+Everything in ADR 0008 that doesn't require real Azure DevOps credentials (which don't exist for
+this project) was actually built and live-tested, not just designed:
+
+- `rag.document_links(source_path, target_path, relation_type)`, a plain adjacency table in the
+  same Postgres `rag-mcp` already uses, with `ON DELETE CASCADE` so deleting a document cleans up
+  its links automatically.
+- `[[wikilink]]`-style parsing in `indexer.py`, resolved by case-insensitive title match in a
+  second pass after every document in a `reindex_knowledge_base` run has been upserted (so link
+  order doesn't matter); an unresolved title is skipped silently, the same "unlinked mention"
+  behavior Obsidian itself has. Wired into the ingestion UI too, so a QA/CS person can type
+  `[[Known Issue Title]]` into a pasted or uploaded document.
+- A new `related_documents` MCP tool returning a document's outgoing links and incoming
+  backlinks, usable by `ai-service`/a Claude routine to pull in graph-connected context a pure
+  semantic-similarity search would miss.
+- Backlinks shown directly in the `/ui` document listing ("Linked from: ...").
+- An in-app graph view at `/ui/graph`, rendered client-side with Cytoscape.js (vendored as a
+  single downloaded file, no build step, no CDN dependency at runtime) fetching nodes/edges from a
+  new `/ui/graph-data` JSON endpoint.
+- An Obsidian vault export script (`app/export_vault.py`), a genuinely close-to-free bonus once
+  the links existed: since document content already contains whatever literal `[[wikilinks]]`
+  were typed into it, exporting is just "write each document's content to a file named after its
+  title" -- Obsidian's own linking engine does the rest. A read-only snapshot, not infrastructure;
+  needs no `docker-compose.yml` changes.
+- Real `[[wikilinks]]` added between the demo corpus's own documents (the FAQ and release notes
+  both reference KI-014; KI-021 was deliberately left unlinked as an orphan node, to demonstrate
+  the graph view actually surfacing gaps, not just connections).
+
+24 new tests across `test_indexer.py`, `test_tools.py`, `test_ui.py`, and a new
+`test_export_vault.py` (link resolution, the MCP tool, backlink rendering, graph-data shape, and
+the export script's filename handling including duplicate-title disambiguation), all passing
+alongside the existing suite (52 total in `rag-mcp`).
+
+### Verified live, including a real Windows/shell encoding bug caught mid-validation
+
+Rebuilt and redeployed `rag-mcp`, then drove the whole feature against the real running Postgres.
+`/ui/graph-data` correctly returned the real edges resolved from the demo corpus's own wikilinks
+(FAQ and release notes both linking to KI-014, KI-021 correctly isolated); the `related_documents`
+tool, called live inside the container, returned KI-014's two real backlinks and an empty result
+for the orphaned KI-021. Added a document through the ingestion UI referencing an existing title
+via `[[...]]` and confirmed the new backlink appeared on the target document; deleted it and
+confirmed the cascade removed the link row, not just the document (backlink count dropped back
+down, not just the document from the list).
+
+Hit a real bug during this validation, caught by directly inspecting stored content rather than
+trusting a `curl` command's exit code: an em-dash typed into a `curl --data-urlencode` argument
+through Git Bash on Windows silently got corrupted into a replacement character before reaching
+the server, so a wikilink test that should have resolved didn't -- the application code was
+actually correct (it treated the mangled title as an honest "no match," exactly as designed for
+an unresolved link), but the test input itself was corrupted at the shell layer. Confirmed this
+by inspecting the stored document content directly and re-running the same resolution through a
+Python string built with a Unicode code-point escape for the em-dash instead of typing the
+literal character, executed inside the container, which resolved correctly. Also chased down what looked like a
+second encoding bug in the same session (three-character mojibake in a `python -m json.tool`
+piped `curl` response) that turned out to be an artifact of that specific Windows Python
+invocation, not the actual JSON response -- confirmed by checking the raw response bytes
+directly, which were correctly encoded UTF-8 the whole time. Given how much shell-boundary
+trouble em-dashes specifically caused across this session, added a rule to the global `CLAUDE.md`
+to avoid typing them into shell commands (or prose generally) going forward.
+
+### Follow-up: installing Obsidian for real, then a download button once a real deployment came up
+
+The project owner then actually installed Obsidian (via `winget`, not previously present on the
+machine) and opened the exported vault directly, confirming the graph rendered correctly, then
+asked a natural next question: on a real deployment where `rag-mcp` runs on a remote VPS, how
+would someone reach that vault with their local Obsidian install? Two options were discussed
+(SSH plus `rsync` for whoever operates the server, versus a small authenticated download
+endpoint for QA/CS staff who only have the `/ui` credentials, not shell access) and the project
+owner asked for the second one specifically, as a button right next to the upload form.
+
+Built as `/ui/vault-download`: the same vault-building logic `export_vault.py`'s CLI path uses,
+refactored into a shared `_vault_files()` helper so there's exactly one place that decides how a
+title becomes a filename, now zipped in memory (Python's stdlib `zipfile`, no new dependency) and
+served as a download, gated by the same Basic Auth already protecting the rest of `/ui`. 4 new
+tests (zip contents, duplicate-title disambiguation, empty-corpus case, and the route's headers),
+all passing alongside the existing suite (56 total in `rag-mcp`).
+
+Live-validated against the real container: downloaded the zip via `curl` with the real Basic Auth
+credentials, confirmed the `Content-Disposition`/`Content-Type` headers, unzipped it, and
+confirmed both the real UTF-8 filenames and the `[[wikilinks]]` inside survived the round trip
+intact (this time via `curl -D -`/`unzip`, not a shell argument, so no repeat of the earlier
+encoding issue).
+
+---

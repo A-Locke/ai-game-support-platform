@@ -64,6 +64,10 @@ real Jira and/or Azure DevOps issues (each independently optional) — see
 [ADR 0004](docs/adr/0004-issue-tracker-grounding.md). QA/CS staff can add to that knowledge base
 themselves — paste text or upload a `.md` file — through a small ingestion UI at `/ui`, with no
 filesystem or MCP access required; see [ADR 0007](docs/adr/0007-knowledge-base-ingestion-ui.md).
+Documents can reference each other with `[[wikilinks]]`, browsable as an actual graph at
+`/ui/graph` (a related_documents MCP tool exposes the same relationships programmatically); see
+[ADR 0008](docs/adr/0008-knowledge-base-at-scale.md) for how this scales toward a real, large
+issue-tracker-backed knowledge base and the alternatives considered along the way.
 
 ## MCP server
 

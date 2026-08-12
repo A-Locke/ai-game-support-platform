@@ -30,3 +30,6 @@ Thumbs.db
 
 # Chatwoot storage bind mount (local dev only)
 chatwoot_storage/
+
+# Obsidian vault export (docs/adr/0008, D11) -- a regeneratable read-only snapshot, not source
+obsidian-vault-export/

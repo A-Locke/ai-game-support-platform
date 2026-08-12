@@ -63,5 +63,38 @@ async def test_index_status_reports_document_count(monkeypatch):
     assert result == {"document_count": 12}
 
 
+async def test_related_documents_returns_links_and_backlinks_tagged_with_direction(monkeypatch):
+    monkeypatch.setattr(tools, "get_pool", lambda: _async_return("fake-pool"))
+
+    async def _fake_links(pool, source_path):
+        assert source_path == "known-issues/ki-014.md"
+        return [{"source_path": "faq/general.md", "title": "FAQ", "relation_type": "link"}]
+
+    async def _fake_backlinks(pool, source_path):
+        assert source_path == "known-issues/ki-014.md"
+        return [{"source_path": "release-notes/1.4.0.md", "title": "Release 1.4.0", "relation_type": "link"}]
+
+    monkeypatch.setattr(tools, "get_links", _fake_links)
+    monkeypatch.setattr(tools, "get_backlinks", _fake_backlinks)
+
+    result = await tools.related_documents("known-issues/ki-014.md")
+
+    assert result["source_path"] == "known-issues/ki-014.md"
+    assert result["links"] == [{"source_path": "faq/general.md", "title": "FAQ", "relation_type": "link", "direction": "outgoing"}]
+    assert result["backlinks"] == [
+        {"source_path": "release-notes/1.4.0.md", "title": "Release 1.4.0", "relation_type": "link", "direction": "incoming"}
+    ]
+
+
+async def test_related_documents_empty_when_no_relationships(monkeypatch):
+    monkeypatch.setattr(tools, "get_pool", lambda: _async_return("fake-pool"))
+    monkeypatch.setattr(tools, "get_links", lambda pool, source_path: _async_return([]))
+    monkeypatch.setattr(tools, "get_backlinks", lambda pool, source_path: _async_return([]))
+
+    result = await tools.related_documents("faq/isolated.md")
+
+    assert result == {"source_path": "faq/isolated.md", "links": [], "backlinks": []}
+
+
 async def _async_return(value):
     return value

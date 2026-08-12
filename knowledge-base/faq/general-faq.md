@@ -2,7 +2,8 @@
 
 **Q: How do I export my data?**
 A: Go to Reports > any report > Export > CSV or PDF. Large exports (over 10,000 rows) should be
-filtered or batched — see KI-014 for the current known limitation.
+filtered or batched — see [[KI-014 — App crashes exporting a report with more than 10,000 rows]]
+for the current known limitation.
 
 **Q: I upgraded to the Pro plan but don't see the new features.**
 A: Plan changes usually apply within a few minutes, but can take up to an hour to propagate.
@@ -17,6 +18,7 @@ your browser/OS, approximately when the issue happened, and what you were doing 
 **Q: How do I set up two-factor authentication?**
 A: Settings > Security > Two-Factor Authentication. We support authenticator apps (TOTP) and
 SMS. Authenticator apps are recommended — SMS-based 2FA is being phased out for new accounts.
+Authenticator app support was added in [[ExampleCo — Release 1.4.0]].
 
 **Q: Can I get a refund?**
 A: Refunds within 14 days of a charge are handled directly by support. After 14 days, refunds

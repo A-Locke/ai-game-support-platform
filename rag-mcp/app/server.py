@@ -41,13 +41,24 @@ async def _run_stdio() -> None:
 async def _run_http() -> None:
     await _index_at_startup()
 
+    from pathlib import Path
+
     import uvicorn
     from starlette.applications import Starlette
     from starlette.responses import JSONResponse
     from starlette.routing import Mount, Route
+    from starlette.staticfiles import StaticFiles
 
     from app.auth import BasicAuthMiddleware, BearerAuthMiddleware
-    from app.ui import ui_create_document, ui_delete_document, ui_index, ui_search
+    from app.ui import (
+        ui_create_document,
+        ui_delete_document,
+        ui_graph,
+        ui_graph_data,
+        ui_index,
+        ui_search,
+        ui_vault_download,
+    )
 
     async def health(request):
         return JSONResponse({"status": "ok"})
@@ -63,6 +74,10 @@ async def _run_http() -> None:
             Route("/ui/documents", ui_create_document, methods=["POST"]),
             Route("/ui/documents/delete", ui_delete_document, methods=["POST"]),
             Route("/ui/search", ui_search, methods=["GET"]),
+            Route("/ui/graph", ui_graph, methods=["GET"]),
+            Route("/ui/graph-data", ui_graph_data, methods=["GET"]),
+            Route("/ui/vault-download", ui_vault_download, methods=["GET"]),
+            Mount("/ui/static", app=StaticFiles(directory=Path(__file__).parent / "static"), name="ui-static"),
             Mount("/", app=mcp_app),
         ],
         lifespan=mcp_app.lifespan,
